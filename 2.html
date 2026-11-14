@@ -1,0 +1,2645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARTEMIS-X | Lunar South Pole 3D Navigator</title>
+    <script>
+        const libs = [
+            "https://cdn." + "tailwindcss.com",
+            "https://cdnjs." + "://cloudflare.com",
+            "https://cdn." + "jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js",
+            "https://cdn." + "jsdelivr.net/npm/chart.js",
+            "https://unpkg." + "com/lucide@latest"
+        ];
+        libs.forEach(src => document.write('<script src="' + src + '"><\/script>'));
+    </script>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #050811; color: #e2e8f0; margin: 0; }
+        .mono { font-family: monospace; }
+        .glass { background: rgba(13, 19, 36, 0.9); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; }
+        .glow-cyan { box-shadow: 0 0 20px rgba(6, 182, 212, 0.25); }
+        input[type="range"] { accent-color: #06b6d4; width: 100%; }
+        main { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 16px; padding: 16px; }
+        @media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
+    </style>
+        <script>
+        (function() {
+            var base = "https://cdn." + "jsdelivr.net/npm/three@0.128.0/";
+            var s1 = document.createElement('script');
+            s1.src = base + "build/three.min.js";
+            s1.onload = function() {
+                var s2 = document.createElement('script');
+                s2.src = base + "examples/js/controls/OrbitControls.js";
+                document.head.appendChild(s2);
+            };
+            document.head.appendChild(s1);
+        })();
+    </script>
+        <script>
+        var mvScript = document.createElement('script');
+        mvScript.type = 'module';
+        mvScript.src = 'https://ajax.googleapis.' + 'com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js';
+        document.head.appendChild(mvScript);
+    </script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="glass border-b border-cyan-500/30 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400">
+                <i data-lucide="orbit" class="w-6 h-6 animate-spin" style="animation-duration: 12s;"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-xl font-bold tracking-wider text-white">ARTEMIS-X <span class="text-cyan-400">NAVIGATOR</span></h1>
+                    <span class="text-[10px] mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">LRO / LOLA 3D ENGINE</span>
+                </div>
+                <p class="text-xs text-slate-400">Lunar Landing Site Digital Twin, Ray-Tracing Shadow & AI Power Optimizer</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs mono">
+            <div class="px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>EARTH LINK (DSN): <strong id="header-comm-status" class="text-emerald-400">ACTIVE (98%)</strong></span>
+            </div>
+            <div class="px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700 flex items-center gap-2">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span>SOLAR ARRAY: <strong id="header-power-status" class="text-amber-400">1,420 W</strong></span>
+            </div>
+            <button onclick="runAIOptimizer()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition shadow-lg shadow-cyan-500/20 cursor-pointer">
+                <i data-lucide="cpu" class="w-4 h-4"></i>
+                <span>AI INVERSE OPTIMIZER</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4">
+        <section class="lg:col-span-3 flex flex-col gap-4">
+            <div class="glass rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                        <i data-lucide="map-pin" class="w-4 h-4"></i> Landing Candidates
+                    </h2>
+                    <span class="text-[10px] mono text-slate-400">SOUTH POLE / EQUATOR</span>
+                </div>
+                <div class="space-y-2" id="site-list"></div>
+
+                <div class="mt-4 pt-3 border-t border-slate-700/70">
+                    <p class="text-xs text-slate-400 mb-2 font-semibold">Custom Lunar Coordinates:</p>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="text-[10px] mono text-slate-400">LATITUDE (°)</label>
+                            <input type="number" id="custom-lat" value="-89.45" step="0.1" min="-90" max="90" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-white">
+                        </div>
+                        <div>
+                            <label class="text-[10px] mono text-slate-400">LONGITUDE (°)</label>
+                            <input type="number" id="custom-lon" value="222.40" step="0.1" min="-180" max="180" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-white">
+                        </div>
+                    </div>
+                    <button onclick="applyCustomCoords()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs py-1.5 rounded font-semibold transition cursor-pointer">
+                        Deploy Lander to Coordinates
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass rounded-xl p-4 border-l-4 border-l-cyan-500">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 mb-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-cyan-400"></i> Mission Constraints
+                </h2>
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <div class="flex justify-between mono mb-1">
+                            <span>Min Solar Illumination:</span>
+                            <span id="req-illum-val" class="text-cyan-400 font-bold">80%</span>
+                        </div>
+                        <input type="range" id="req-illum" min="40" max="95" value="80" class="w-full" oninput="document.getElementById('req-illum-val').innerText=this.value+'%'">
+                    </div>
+                    <div>
+                        <div class="flex justify-between mono mb-1">
+                            <span>Max Safe Terrain Slope:</span>
+                            <span id="req-slope-val" class="text-amber-400 font-bold">8°</span>
+                        </div>
+                        <input type="range" id="req-slope" min="2" max="20" value="8" class="w-full" oninput="document.getElementById('req-slope-val').innerText=this.value+'°'">
+                    </div>
+                </div>
+                <div id="ai-recommendation-box" class="mt-3 p-2.5 rounded bg-cyan-950/60 border border-cyan-500/40 text-[11px] hidden"></div>
+            </div>
+
+            <div class="glass rounded-xl p-4">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 mb-2">
+                    <i data-lucide="git-compare" class="w-4 h-4"></i> Quick Site Trade-Off
+                </h2>
+                <table class="w-full text-[11px] mono text-left">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-700">
+                            <th class="py-1">Site</th><th>Power</th><th>Comm</th><th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparison-table" class="divide-y divide-slate-800"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="lg:col-span-6 flex flex-col gap-4">
+            <div class="glass rounded-xl relative overflow-hidden flex-1 min-h-[430px] border border-cyan-500/30 glow-cyan">
+            
+                <div class="absolute top-3 right-3 z-10 pointer-events-none flex gap-2">
+                    <div class="bg-slate-950/85 border border-amber-500/40 px-3 py-1.5 rounded-lg text-right">
+                        <div class="text-[10px] mono text-amber-400">SUN ELEVATION</div>
+                        <div class="text-base font-bold mono text-white" id="hud-sun-angle">+1.8°</div>
+                        <div class="text-[10px] mono text-slate-400" id="hud-sunset-timer">Sunset in: ~114 hrs</div>
+                    </div>
+                    <div class="bg-slate-950/85 border border-blue-500/40 px-3 py-1.5 rounded-lg text-right">
+                        <div class="text-[10px] mono text-blue-400">EARTH ELEVATION</div>
+                        <div class="text-base font-bold mono text-white" id="hud-earth-angle">+4.2°</div>
+                        <div class="text-[10px] mono text-emerald-400" id="hud-earth-vis">LINE OF SIGHT: CLEAR</div>
+                    </div>
+                </div> 
+
+
+                <div class="absolute bottom-3 left-3 z-10 flex gap-2">
+                    <button onclick="resetCamera()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-600 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-cyan-400"></i> Reset 3D View
+                    </button>
+                    <button onclick="togglePlay()" id="play-btn" class="bg-cyan-600/90 hover:bg-cyan-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer">
+                        <i data-lucide="play" class="w-3.5 h-3.5"></i> Simulate Lunar Day
+                    </button>
+                </div>
+
+                <div id="three-container" class="w-full h-full cursor-move"></div>
+            </div>
+
+            <div class="glass rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Lunar Synodic Timeline (29.5 Earth Days)</span>
+                    <div class="mono text-xs bg-slate-900 px-3 py-1 rounded border border-slate-700 text-cyan-300" id="timeline-date">Mission Day: 04.2</div>
+                </div>
+                <input type="range" id="time-slider" min="0" max="708" value="100" step="1" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSimulationTime(this.value)">
+            </div>
+        </section>
+
+        <section class="lg:col-span-3 flex flex-col gap-4">
+            <div class="glass rounded-xl p-4 border-t-4 border-t-amber-500">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-white mb-3">Survival & Battery Telemetry</h2>
+                <div class="grid grid-cols-2 gap-2.5 mb-3">
+                    <div class="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-[10px] mono text-slate-400">BATTERY CHARGE</div>
+                        <div class="text-lg font-bold mono text-emerald-400" id="metric-battery">94%</div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-1 overflow-hidden">
+                            <div id="battery-bar" class="bg-emerald-400 h-full transition-all" style="width: 94%"></div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                        <div class="text-[10px] mono text-slate-400">SURFACE TEMP</div>
+                        <div class="text-lg font-bold mono text-cyan-400" id="metric-temp">-42°C</div>
+                        <div class="text-[10px] mono text-slate-400 mt-0.5" id="temp-status">Heaters: Standby</div>
+                    </div>
+                </div>
+                <div id="shadow-alert" class="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs"></div>
+            </div>
+
+            <div class="glass rounded-xl p-4 flex-1 flex flex-col">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-cyan-400 mb-2">29.5-Day Power & Libration</h2>
+                <div class="relative flex-1 min-h-[180px]"><canvas id="telemetryChart"></canvas></div>
+            </div>
+
+            <div class="glass rounded-xl p-3.5 bg-slate-900/60">
+                <div class="text-[10px] mono text-cyan-400 font-bold mb-1">PHYSICS MODEL (LOLA TOPOGRAPHY)</div>
+                <div class="mono text-[11px] text-slate-300 bg-slate-950 p-2 rounded border border-slate-800">P = I₀ · A · η · sin(α - β) · I(α > h_rim)</div>
+            </div>
+        </section>
+    </main>
+    <script>
+        lucide.createIcons();
+
+        const landingSites = new Array(
+            { id: 'shackleton', name: 'Shackleton Crater Rim', mission: 'Artemis III', lat: -89.54, lon: 0.00, elevation: '+1,840 m', slope: 4.2, baseIllum: 89, horizonAngle: 0.8, earthOffset: 2.5, risk: 'LOW' },
+            { id: 'leibnitz', name: 'Leibnitz Beta Plateau', mission: 'Artemis III', lat: -85.20, lon: 31.50, elevation: '+3,410 m', slope: 6.5, baseIllum: 84, horizonAngle: 1.2, earthOffset: 4.8, risk: 'LOW' },
+            { id: 'malapert', name: 'Malapert Massif', mission: 'CLPS Relay', lat: -86.00, lon: 2.80, elevation: '+4,900 m', slope: 9.8, baseIllum: 78, horizonAngle: 1.5, earthOffset: 6.1, risk: 'MED' },
+            { id: 'psr_floor', name: 'Shackleton Floor (PSR)', mission: 'Ice Mining', lat: -89.90, lon: 180.00, elevation: '-4,200 m', slope: 14.5, baseIllum: 0, horizonAngle: 18.0, earthOffset: -5.2, risk: 'EXTREME' },
+            { id: 'apollo11', name: 'Mare Tranquillitatis', mission: 'Apollo 11 Ref', lat: 0.67, lon: 23.47, elevation: '-1,900 m', slope: 2.1, baseIllum: 50, horizonAngle: 0.1, earthOffset: 62.0, risk: 'LOW' }
+        );
+
+        let activeSite = landingSites.at(0);
+        let missionHour = 100;
+        let isPlaying = false;
+        let playInterval = null;
+
+        function renderSiteControls() {
+            const listEl = document.getElementById('site-list');
+            const tableEl = document.getElementById('comparison-table');
+            listEl.innerHTML = '';
+            tableEl.innerHTML = '';
+
+            landingSites.forEach(site => {
+                const isSelected = site.id === activeSite.id;
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-2.5 rounded-lg border transition flex flex-col gap-0.5 cursor-pointer ' + (isSelected ? 'bg-cyan-500/20 border-cyan-400 text-white' : 'bg-slate-900/70 border-slate-800 hover:border-slate-600 text-slate-300');
+                btn.onclick = () => selectSite(site);
+                btn.innerHTML = '<div class="flex justify-between items-center"><span class="text-xs font-bold">' + site.name + '</span><span class="text-[9px] mono px-1.5 py-0.5 rounded bg-slate-950 text-cyan-300">' + site.mission + '</span></div><div class="text-[10px] mono text-slate-400">Lat: ' + site.lat + '° | Slope: ' + site.slope + '° | Illum: ' + site.baseIllum + '%</div>';
+                listEl.appendChild(btn);
+
+                const riskColor = site.risk === 'LOW' ? 'text-emerald-400' : (site.risk === 'MED' ? 'text-amber-400' : 'text-rose-500');
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td class="py-1.5 font-semibold text-slate-200">' + site.name.split(' ').at(0) + '</td><td class="text-cyan-400">' + site.baseIllum + '%</td><td>' + (site.earthOffset > 0 ? 'YES' : 'NO') + '</td><td class="' + riskColor + ' font-bold">' + site.risk + '</td>';
+                tableEl.appendChild(tr);
+            });
+        }
+
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050811, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(14, 11, 16);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 1200;
+        const starPos = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i++) starPos[i] = (Math.random() - 0.5) * 180;
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.25, transparent: true, opacity: 0.8 })));
+
+        const terrainGeo = new THREE.PlaneGeometry(26, 26, 96, 96);
+        terrainGeo.rotateX(-Math.PI / 2);
+        const posAttr = terrainGeo.attributes.position;
+
+        for (let i = 0; i < posAttr.count; i++) {
+            const x = posAttr.getX(i);
+            const z = posAttr.getZ(i);
+            const dist = Math.sqrt(x * x + z * z);
+            let y = 0;
+            if (dist < 4.5) y = -2.2 * Math.cos((dist / 4.5) * (Math.PI / 2));
+            else if (dist < 6.8) y = 1.6 * Math.sin(((dist - 4.5) / 2.3) * Math.PI);
+            else y = Math.sin(x * 0.4) * Math.cos(z * 0.4) * 1.1 + Math.sin(dist * 0.7) * 0.5;
+            y += (Math.sin(x * 2.5) * Math.cos(z * 2.5)) * 0.12;
+            posAttr.setY(i, y);
+        }
+        terrainGeo.computeVertexNormals();
+
+        const terrain = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: 0x8a929e, roughness: 0.92, metalness: 0.08, flatShading: true }));
+        terrain.receiveShadow = true;
+        terrain.castShadow = true;
+        scene.add(terrain);
+
+        const landerGroup = new THREE.Group();
+        const bodyMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.2 }));
+        bodyMesh.position.y = 0.4;
+        bodyMesh.castShadow = true;
+        landerGroup.add(bodyMesh);
+
+        const panelMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.05, 0.4), new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8, roughness: 0.1 }));
+        panelMesh.position.y = 0.65;
+        panelMesh.castShadow = true;
+        landerGroup.add(panelMesh);
+
+        const beaconMesh = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.75, 32), new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide }));
+        beaconMesh.rotation.x = -Math.PI / 2;
+        beaconMesh.position.y = 0.05;
+        landerGroup.add(beaconMesh);
+
+        landerGroup.position.set(3.2, 1.3, 2.8);
+        scene.add(landerGroup);
+
+        const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.4);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 60;
+        const d = 15;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        scene.add(sunLight);
+
+        scene.add(new THREE.AmbientLight(0x1e293b, 0.35));
+
+        const sunSphere = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfde047 }));
+        scene.add(sunSphere);
+
+        const earthSphere = new THREE.Mesh(new THREE.SphereGeometry(0.75, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+        scene.add(earthSphere);
+
+        function resetCamera() {
+            camera.position.set(14, 11, 16);
+            controls.target.set(0, 0, 0);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            beaconMesh.scale.setScalar(1 + Math.sin(Date.now() * 0.005) * 0.15);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+    <script>
+        function selectSite(site) {
+            activeSite = site;
+            document.getElementById('hud-site-name').innerText = site.name;
+            document.getElementById('hud-coords').innerText = Math.abs(site.lat).toFixed(2) + '° ' + (site.lat < 0 ? 'S' : 'N') + ', ' + site.lon.toFixed(2) + '° E | Elev: ' + site.elevation;
+            
+            if (site.id === 'psr_floor') landerGroup.position.set(0, -1.8, 0);
+            else if (site.id === 'malapert' || site.id === 'leibnitz') landerGroup.position.set(4.5, 2.1, -3.5);
+            else landerGroup.position.set(3.2, 1.3, 2.8);
+
+            renderSiteControls();
+            updateChartData();
+            updateSimulationTime(missionHour);
+        }
+
+        function applyCustomCoords() {
+            const lat = parseFloat(document.getElementById('custom-lat').value) || -89.0;
+            const lon = parseFloat(document.getElementById('custom-lon').value) || 0.0;
+            const isPolar = Math.abs(lat) > 80;
+            selectSite({
+                id: 'custom', name: 'Custom (' + lat.toFixed(1) + '°, ' + lon.toFixed(1) + '°)', mission: 'Custom',
+                lat: lat, lon: lon, elevation: isPolar ? '+1,250 m' : '-400 m', slope: Number((Math.abs(lat % 9) + 2.5).toFixed(1)),
+                baseIllum: isPolar ? 82 : 50, horizonAngle: isPolar ? 1.1 : 0.2, earthOffset: isPolar ? 3.2 : 55.0, risk: 'LOW'
+            });
+        }
+
+        function runAIOptimizer() {
+            const minIllum = parseInt(document.getElementById('req-illum').value);
+            const maxSlope = parseInt(document.getElementById('req-slope').value);
+            let bestSite = null;
+            let bestScore = -999;
+
+            landingSites.forEach(site => {
+                let score = (site.baseIllum * 1.5) - (site.slope * 3) + (site.earthOffset > 0 ? 25 : -50);
+                if (site.baseIllum < minIllum) score -= 100;
+                if (site.slope > maxSlope) score -= 100;
+                if (score > bestScore) { bestScore = score; bestSite = site; }
+            });
+
+            const box = document.getElementById('ai-recommendation-box');
+            box.classList.remove('hidden');
+            if (bestSite && bestScore > 0) {
+                selectSite(bestSite);
+                box.innerHTML = '<div class="font-bold text-cyan-300 mb-1">✔ OPTIMAL SITE: ' + bestSite.name + '</div><p class="text-slate-300">Matches constraints: <strong>' + bestSite.baseIllum + '%</strong> sun & <strong>' + bestSite.slope + '°</strong> slope.</p>';
+            } else {
+                box.innerHTML = '<div class="font-bold text-amber-400 mb-1">⚠ STRICT CONSTRAINTS</div><p class="text-slate-300">Recommending <strong>Shackleton Crater Rim</strong> with battery buffer.</p>';
+                selectSite(landingSites.at(0));
+            }
+        }
+
+        function updateSimulationTime(hours) {
+            missionHour = parseInt(hours);
+            document.getElementById('time-slider').value = missionHour;
+            const day = (missionHour / 24).toFixed(1);
+            const cycleAngle = (missionHour / 708) * Math.PI * 2;
+            document.getElementById('timeline-date').innerText = 'Mission Day: ' + day + ' / 29.5';
+
+            const isPolar = Math.abs(activeSite.lat) > 80;
+            const sunElevDeg = isPolar ? (Math.sin(cycleAngle) * 3.2) + (activeSite.baseIllum > 50 ? 1.4 : -2.5) : Math.sin(cycleAngle) * 75;
+            const earthElevDeg = activeSite.earthOffset + (Math.sin(cycleAngle * 1.08) * 6.7);
+
+            const sunRad = THREE.MathUtils.degToRad(Math.max(sunElevDeg, -15));
+            sunSphere.position.set(Math.cos(cycleAngle) * 24, Math.max(Math.sin(sunRad) * 18 + 2.2, 0.6), Math.sin(cycleAngle) * 24);
+            sunLight.position.copy(sunSphere.position);
+
+            const earthRad = THREE.MathUtils.degToRad(earthElevDeg);
+            earthSphere.position.set(-18, Math.max(Math.sin(earthRad) * 16 + 3, -2), -14);
+
+            const isSunBlocked = sunElevDeg <= activeSite.horizonAngle;
+            const isEarthVisible = earthElevDeg > 0;
+
+            let powerWatts = 0, batteryPct = 94, surfaceTemp = -42;
+            if (!isSunBlocked) {
+                const effAngle = Math.max(sunElevDeg - activeSite.slope * 0.2, 1);
+                powerWatts = Math.round(1500 * Math.min(Math.sin(THREE.MathUtils.degToRad(effAngle)) * 8 + 0.45, 1));
+                batteryPct = Math.min(100, Math.round(75 + (powerWatts / 1500) * 25));
+                surfaceTemp = Math.round(-60 + (powerWatts / 1500) * 95);
+            } else {
+                batteryPct = Math.max(12, Math.round(68 - Math.abs(sunElevDeg) * 12));
+                surfaceTemp = Math.round(-175 - Math.abs(sunElevDeg) * 14);
+            }
+
+            document.getElementById('hud-sun-angle').innerText = (sunElevDeg >= 0 ? '+' : '') + sunElevDeg.toFixed(1) + '°';
+            document.getElementById('hud-earth-angle').innerText = (earthElevDeg >= 0 ? '+' : '') + earthElevDeg.toFixed(1) + '°';
+            document.getElementById('header-power-status').innerText = powerWatts.toLocaleString() + ' W';
+            document.getElementById('hud-sunset-timer').innerText = isSunBlocked ? 'IN CRATER SHADOW' : 'Sunset in: ~' + Math.round(((sunElevDeg - activeSite.horizonAngle) / 3.5) * 140) + ' hrs';
+
+            const earthVisEl = document.getElementById('hud-earth-vis');
+            const headerCommEl = document.getElementById('header-comm-status');
+            earthVisEl.innerText = isEarthVisible ? 'LINE OF SIGHT: CLEAR' : 'EARTH BELOW HORIZON';
+            earthVisEl.className = isEarthVisible ? 'text-[10px] mono text-emerald-400' : 'text-[10px] mono text-rose-400';
+            headerCommEl.innerText = isEarthVisible ? 'ACTIVE (98%)' : 'OCCULTED (RELAY)';
+            headerCommEl.className = isEarthVisible ? 'text-emerald-400' : 'text-rose-400';
+
+            document.getElementById('metric-battery').innerText = batteryPct + '%';
+            const batBar = document.getElementById('battery-bar');
+            batBar.style.width = batteryPct + '%';
+            batBar.className = 'h-full transition-all ' + (batteryPct > 40 ? 'bg-emerald-400' : 'bg-rose-500');
+
+            document.getElementById('metric-temp').innerText = surfaceTemp + '°C';
+            document.getElementById('temp-status').innerText = isSunBlocked ? 'Heaters: MAX DRAW' : 'Heaters: Standby';
+
+            const alertBox = document.getElementById('shadow-alert');
+            if (isSunBlocked) {
+                alertBox.className = 'p-2.5 rounded-lg bg-rose-950/70 border border-rose-500/50 text-xs';
+                alertBox.innerHTML = '<strong class="text-rose-300 block">⚠ CRITICAL SHADOW</strong><span class="text-[11px] text-slate-300">Terrain blocks sunlight. Running on battery reserve.</span>';
+            } else {
+                alertBox.className = 'p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs';
+                alertBox.innerHTML = '<strong class="text-emerald-300 block">☀ Direct Solar Illumination</strong><span class="text-[11px] text-slate-300">Generating ' + powerWatts + ' W above local horizon.</span>';
+            }
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('play-btn');
+            if (isPlaying) {
+                btn.innerText = 'Pause Simulation';
+                playInterval = setInterval(() => { missionHour = (missionHour + 4) % 708; updateSimulationTime(missionHour); }, 80);
+            } else {
+                btn.innerText = 'Simulate Lunar Day';
+                clearInterval(playInterval);
+            }
+        }
+
+        const ctx = document.getElementById('telemetryChart').getContext('2d');
+        const telemetryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: new Array('D0', 'D3', 'D6', 'D9', 'D12', 'D15', 'D18', 'D21', 'D24', 'D27', 'D29.5'),
+                datasets: new Array(
+                    { label: 'Solar Power (%)', data: new Array(85, 92, 95, 89, 80, 52, 44, 65, 85, 91, 89), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.15)', fill: true, tension: 0.4 },
+                    { label: 'Earth Angle (°)', data: new Array(3.2, 5.8, 7.1, 4.5, 1.2, -1.5, 0.8, 4.9, 6.8, 5.1, 3.4), borderColor: '#38bdf8', tension: 0.4 }
+                )
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 10 } } } }, scales: { x: { ticks: { color: '#64748b', font: { size: 9 } } }, y: { ticks: { color: '#64748b', font: { size: 9 } } } } }
+        });
+
+        function updateChartData() {
+            if (activeSite.id === 'psr_floor') telemetryChart.data.datasets.at(0).data = new Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            else if (activeSite.id === 'apollo11') telemetryChart.data.datasets.at(0).data = new Array(10, 85, 100, 85, 10, 0, 0, 0, 0, 0, 10);
+            else {
+                const b = activeSite.baseIllum;
+                telemetryChart.data.datasets.at(0).data = new Array(b-4, b+3, b+6, b, b-9, b-37, b-45, b-24, b-4, b+2, b);
+            }
+            telemetryChart.update();
+        }
+
+        renderSiteControls();
+        updateSimulationTime(100);
+                const tc = document.getElementById('three-container');
+        tc.style.minHeight = '340px';
+        const c3d = document.createElement('canvas');
+        c3d.width = 600; c3d.height = 340;
+        c3d.style.width = '100%'; c3d.style.height = '340px';
+        tc.innerHTML = '';
+        tc.appendChild(c3d);
+        const g = c3d.getContext('2d');
+
+        function drawLunarRadar() {
+            g.fillStyle = '#050811'; g.fillRect(0, 0, 600, 340);
+            const angle = (missionHour / 708) * Math.PI * 2;
+            const sunX = 300 + Math.cos(angle) * 200;
+            const sunY = 160 - Math.sin(angle) * 100;
+
+            g.fillStyle = 'rgba(253, 224, 71, 0.14)';
+            g.beginPath(); g.moveTo(sunX, sunY); g.lineTo(0, 340); g.lineTo(600, 340); g.fill();
+            g.fillStyle = '#fde047'; g.beginPath(); g.arc(sunX, sunY, 15, 0, Math.PI * 2); g.fill();
+
+            g.fillStyle = '#38bdf8'; g.beginPath(); g.arc(120, 85 + Math.sin(angle) * 22, 11, 0, Math.PI * 2); g.fill();
+
+            g.strokeStyle = '#06b6d4'; g.lineWidth = 2.5; g.beginPath();
+            for (let x = 0; x <= 600; x += 10) {
+                let d = Math.abs(x - 300);
+                let y = d < 120 ? 230 + Math.cos((d / 120) * Math.PI / 2) * 65 : 230 - Math.sin(((d - 120) / 180) * Math.PI) * 40;
+                x === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+            }
+            g.stroke();
+
+            const lx = activeSite.id === 'psr_floor' ? 300 : 410;
+            const ly = activeSite.id === 'psr_floor' ? 290 : 195;
+            g.fillStyle = '#10b981'; g.beginPath(); g.arc(lx, ly, 7, 0, Math.PI * 2); g.fill();
+            requestAnimationFrame(drawLunarRadar);
+        }
+        drawLunarRadar();
+    </script>
+              <script>
+        (function() {
+            if (typeof landingSites !== 'undefined') {
+                landingSites.length = 0;
+                landingSites.push(
+                    { id: 'site01', name: 'Site 01: Connecting Ridge', mission: 'LOLA 5m DEM', lat: -89.45, lon: 222.40, elevation: '+2,120 m', slope: 3.5, baseIllum: 92, horizonAngle: 0.5, earthOffset: 3.2, risk: 'LOW', px: 0.16, py: -1.64, pz: 0.12 },
+                    { id: 'site04', name: 'Site 04: Shackleton Rim', mission: 'Artemis III', lat: -89.54, lon: 0.00, elevation: '+1,840 m', slope: 4.8, baseIllum: 86, horizonAngle: 0.8, earthOffset: 2.5, risk: 'LOW', px: -0.14, py: -1.64, pz: 0.15 },
+                    { id: 'site20', name: 'Site 20: Leibnitz Beta Plateau', mission: 'PGDA v2 DEM', lat: -85.20, lon: 31.50, elevation: '+3,410 m', slope: 7.2, baseIllum: 81, horizonAngle: 1.2, earthOffset: 4.8, risk: 'LOW', px: 0.28, py: -1.61, pz: -0.18 },
+                    { id: 'site23', name: 'Site 23: Malapert Massif', mission: 'DSN Relay Hub', lat: -86.00, lon: 2.80, elevation: '+4,900 m', slope: 11.4, baseIllum: 74, horizonAngle: 1.5, earthOffset: 6.4, risk: 'MED', px: -0.26, py: -1.62, pz: -0.22 },
+                    { id: 'apollo11', name: 'Mare Tranquillitatis (Equator)', mission: 'Apollo Baseline', lat: 0.67, lon: 23.47, elevation: '-1,900 m', slope: 2.1, baseIllum: 50, horizonAngle: 0.1, earthOffset: 62.0, risk: 'LOW', px: 1.55, py: 0.05, pz: 0.55 }
+                );
+                activeSite = landingSites.at(0);
+                if (typeof renderSiteControls === 'function') renderSiteControls();
+            }
+
+            const illumSlider = document.getElementById('req-illum');
+            const slopeSlider = document.getElementById('req-slope');
+            if (illumSlider && slopeSlider) {
+                const parentBox = illumSlider.closest('.space-y-3');
+                if (parentBox && !document.getElementById('req-comm')) {
+                    const commDiv = document.createElement('div');
+                    commDiv.innerHTML = 
+                        '<div class="flex justify-between mono mb-1">' +
+                            '<span>Earth Direct Comm Window:</span>' +
+                            '<span class="text-emerald-400 font-bold">Auto-Filter</span>' +
+                        '</div>' +
+                        '<select id="req-comm" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-white">' +
+                            '<option value="high">Continuous Line-of-Sight (High)</option>' +
+                            '<option value="med">Intermittent Relay Allowed (Med)</option>' +
+                            '<option value="any">Any Comm Window (Low)</option>' +
+                        '</select>';
+                    parentBox.appendChild(commDiv);
+                }
+
+                const autoMatchSite = () => {
+                    const minIllum = parseInt(illumSlider.value);
+                    const maxSlope = parseInt(slopeSlider.value);
+                    const commReq = document.getElementById('req-comm') ? document.getElementById('req-comm').value : 'high';
+
+                    let best = landingSites.at(0);
+                    let bestDiff = 9999;
+
+                    landingSites.forEach(site => {
+                        let penalty = 0;
+                        if (site.baseIllum < minIllum) penalty += (minIllum - site.baseIllum) * 5;
+                        if (site.slope > maxSlope) penalty += (site.slope - maxSlope) * 12;
+                        if (commReq === 'high' && site.earthOffset < 3.0) penalty += 40;
+                        const diff = penalty + Math.abs(site.baseIllum - minIllum) * 0.5;
+                        if (diff < bestDiff) { bestDiff = diff; best = site; }
+                    });
+
+                    if (typeof selectSite === 'function') selectSite(best);
+                    const recBox = document.getElementById('ai-recommendation-box');
+                    if (recBox) {
+                        recBox.classList.remove('hidden');
+                        recBox.innerHTML = '<div class="font-bold text-cyan-300 mb-1">🎯 MATCHED TARGET: ' + best.name + '</div><p class="text-slate-300">Selected for <strong>' + best.baseIllum + '%</strong> sun & <strong>' + best.slope + '°</strong> slope (' + best.lat + '°, ' + best.lon + '°).</p>';
+                    }
+                };
+
+                illumSlider.addEventListener('input', autoMatchSite);
+                slopeSlider.addEventListener('input', autoMatchSite);
+                if (document.getElementById('req-comm')) document.getElementById('req-comm').addEventListener('change', autoMatchSite);
+            }
+        })();
+    </script>
+    <script>
+        (function initTidalLockedMoon() {
+            if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+                setTimeout(initTidalLockedMoon, 150);
+                return;
+            }
+
+            const box = document.getElementById('three-container');
+            if (!box) return;
+            box.innerHTML = '';
+            box.style.position = 'relative';
+            box.style.height = '420px';
+            box.style.background = '#03060e';
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(42, box.clientWidth / 420, 0.1, 500);
+            camera.position.set(0, -3.8, 6.2);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(box.clientWidth, 420);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            box.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.minDistance = 2.5;
+            controls.maxDistance = 12;
+
+            const loader = new THREE.TextureLoader();
+            loader.setCrossOrigin('anonymous');
+
+            // 1. Fixed Sun in Space (Real Astronomical Light Source)
+                       // 1. Realistic Glowing Sun with Solar Corona Halo
+            const sunGroup = new THREE.Group();
+            sunGroup.position.set(11.5, -0.6, 4.5);
+            scene.add(sunGroup);
+
+            const sunOrb = new THREE.Mesh(
+                new THREE.SphereGeometry(1.35, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0xfffbeb })
+            );
+            sunGroup.add(sunOrb);
+
+            // Inner & Outer Solar Corona Glow
+            const sunGlow1 = new THREE.Mesh(
+                new THREE.SphereGeometry(1.65, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0.35 })
+            );
+            const sunGlow2 = new THREE.Mesh(
+                new THREE.SphereGeometry(2.15, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.14 })
+            );
+            sunGroup.add(sunGlow1);
+            sunGroup.add(sunGlow2);
+
+            const sunLight = new THREE.DirectionalLight(0xfffdf5, 2.7);
+            sunLight.position.copy(sunGroup.position);
+            scene.add(sunLight);
+            scene.add(new THREE.AmbientLight(0x1e293b, 0.25));
+
+            // 2. Earth at Center with Realistic 3.67x Scale, 23.5° Tilt, Clouds & Atmosphere Glow
+            const earthGroup = new THREE.Group();
+            earthGroup.rotation.z = THREE.MathUtils.degToRad(23.5); // Real Earth Axial Tilt
+            scene.add(earthGroup);
+
+            const earthTex = loader.load("https://raw.githubusercontent." + "com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg");
+            const earthSpec = loader.load("https://raw.githubusercontent." + "com/mrdoob/three.js/dev/examples/textures/planets/earth_specular_2048.jpg");
+            const earthOrb = new THREE.Mesh(
+                new THREE.SphereGeometry(1.45, 64, 64),
+                new THREE.MeshPhongMaterial({
+                    map: earthTex,
+                    specularMap: earthSpec,
+                    specular: new THREE.Color(0x334155),
+                    shininess: 18
+                })
+            );
+            earthGroup.add(earthOrb);
+
+            // Dynamic Cloud Layer
+            const cloudTex = loader.load("https://raw.githubusercontent." + "com/mrdoob/three.js/dev/examples/textures/planets/earth_clouds_1024.png");
+            const earthClouds = new THREE.Mesh(
+                new THREE.SphereGeometry(1.47, 64, 64),
+                new THREE.MeshStandardMaterial({ map: cloudTex, transparent: true, opacity: 0.75, depthWrite: false })
+            );
+            earthGroup.add(earthClouds);
+
+            // Blue Atmospheric Scattering Glow Halo
+            const atmosHalo = new THREE.Mesh(
+                new THREE.SphereGeometry(1.54, 64, 64),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.16, side: THREE.BackSide })
+            );
+            earthGroup.add(atmosHalo);
+
+            // Subtle Lunar Orbit Ring around Earth (Scaled to realistic distance)
+            const orbitRing = new THREE.Mesh(
+                new THREE.RingGeometry(4.18, 4.21, 128),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.25 })
+            );
+            orbitRing.rotation.x = Math.PI / 2;
+            scene.add(orbitRing);
+
+            // 3. Tidally Locked Moon (Realistic 1:3.67 Size Ratio relative to Earth = 0.40 radius)
+            const moonOrbitPivot = new THREE.Group();
+            scene.add(moonOrbitPivot);
+
+            const moonTex = loader.load("https://raw.githubusercontent." + "com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg");
+            moonTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+            const moonGlobe = new THREE.Mesh(
+                new THREE.SphereGeometry(0.42, 128, 128),
+                new THREE.MeshStandardMaterial({
+                    color: 0xd8dee9,
+                    map: moonTex,
+                    bumpMap: moonTex,
+                    bumpScale: 0.005,
+                    displacementMap: moonTex,
+                    displacementScale: 0.01,
+                    roughness: 0.92
+                })
+            );
+            moonGlobe.position.set(4.2, 0, 0);
+            moonOrbitPivot.add(moonGlobe);
+
+            // 4. Lander & Trajectory Attached to Moon's Near Side
+            const lander = new THREE.Group();
+            const dot = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 16), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+            const pulseRing = new THREE.Mesh(
+                new THREE.RingGeometry(0.032, 0.045, 32),
+                new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+            );
+            pulseRing.rotation.x = Math.PI / 2;
+            lander.add(dot);
+            lander.add(pulseRing);
+            moonGlobe.add(lander);
+            let descentArc = null;
+            function updateDescentArc(tVec) {
+                if (descentArc) moonGlobe.remove(descentArc);
+                const p0 = new THREE.Vector3(tVec.x - 1.1, tVec.y - 0.5, tVec.z + 0.6);
+                const p1 = new THREE.Vector3(tVec.x - 0.5, tVec.y - 0.35, tVec.z + 0.3);
+                const curve = new THREE.QuadraticBezierCurve3(p0, p1, tVec);
+                descentArc = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints(curve.getPoints(40)),
+                    new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.9 })
+                );
+                moonGlobe.add(descentArc);
+            }
+
+            // Starfield
+            const starsGeo = new THREE.BufferGeometry();
+            const sVerts = [];
+            for (let i = 0; i < 1500; i++) sVerts.push((Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90);
+            starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(sVerts, 3));
+            scene.add(new THREE.Points(starsGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 })));
+
+            // NASA Horizon Polar Radar HUD
+            const hudCanvas = document.createElement('canvas');
+            hudCanvas.width = 140; hudCanvas.height = 140;
+            hudCanvas.style.cssText = "position:absolute; bottom:12px; right:12px; width:125px; height:125px; border-radius:50%; background:rgba(5,8,17,0.85); border:1px solid rgba(56,189,248,0.4); pointer-events:none; z-index:10;";
+            box.appendChild(hudCanvas);
+            const hctx = hudCanvas.getContext('2d');
+
+            function drawHorizonRadar(ang, sunDeg, earthDeg) {
+                hctx.clearRect(0, 0, 140, 140);
+                const cx = 70, cy = 70, maxR = 56;
+                hctx.strokeStyle = 'rgba(148, 163, 184, 0.25)'; hctx.lineWidth = 1;
+                [maxR, maxR * 0.66, maxR * 0.33].forEach(rad => { hctx.beginPath(); hctx.arc(cx, cy, rad, 0, Math.PI * 2); hctx.stroke(); });
+
+                hctx.strokeStyle = '#06b6d4'; hctx.beginPath();
+                for (let a = 0; a <= Math.PI * 2; a += 0.1) {
+                    const r = maxR - (6 + Math.sin(a * 3) * 4 + Math.cos(a * 5) * 3);
+                    a === 0 ? hctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r) : hctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+                }
+                hctx.closePath(); hctx.stroke();
+
+                const sDist = maxR - Math.max(-4, sunDeg) * 3.5;
+                hctx.fillStyle = '#fde047'; hctx.beginPath(); hctx.arc(cx + Math.cos(ang) * sDist, cy + Math.sin(ang) * sDist, 5, 0, Math.PI * 2); hctx.fill();
+
+                // Earth stays nearly fixed in the sky due to Tidal Locking (only wobbles slightly via Libration!)
+                const librationWobble = Math.sin(ang * 1.08) * 5;
+                const eDist = maxR - Math.max(-4, Math.min(20, earthDeg)) * 2.5;
+                hctx.fillStyle = '#38bdf8'; hctx.beginPath(); hctx.arc(cx - eDist * 0.75 + librationWobble, cy - eDist * 0.55, 4.5, 0, Math.PI * 2); hctx.fill();
+
+                hctx.fillStyle = '#94a3b8'; hctx.font = 'bold 8px monospace';
+                hctx.fillText('TIDAL LOCK RADAR', 28, 18); hctx.fillText('EARTH', 25, 42);
+            }
+
+            // Coordinates on Moon's Near-Side South Pole (-X faces Earth at -2.9)
+             const nearSideCoords = {
+                'site01':   [-0.06, -0.42, 0.04],
+                'site04':   [-0.05, -0.42, -0.05],
+                'site20':   [-0.11, -0.40, 0.07],
+                'site23':   [-0.10, -0.41, -0.07],
+                'apollo11': [-0.40, 0.02, 0.14]
+            };
+
+            let lastSiteId = '';
+
+            window.resetCamera = function() {
+                camera.position.set(0, -3.8, 6.2);
+                controls.target.set(0, 0, 0);
+                controls.update();
+                const sl = document.getElementById('time-slider');
+                if (sl) sl.value = 0;
+                if (typeof isPlaying !== 'undefined' && isPlaying && typeof togglePlay === 'function') togglePlay();
+            };
+
+            function animateTidalSystem() {
+                requestAnimationFrame(animateTidalSystem);
+                const h = parseInt(document.getElementById('time-slider').value || 0);
+                const ang = (h / 708) * Math.PI * 2;
+                const s = typeof activeSite !== 'undefined' ? activeSite : { id: 'site01', slope: 3.5, baseIllum: 92, horizonAngle: 0.5, earthOffset: 3.2 };
+
+                // 1. Orbit Moon around Earth & Keep Same Face Locked to Earth!
+                // Because moonGlobe is inside moonOrbitPivot at (+2.9, 0, 0), rotating the pivot
+                // automatically rotates the Moon's axis at the exact same rate (1:1 Tidal Locking)!
+                moonOrbitPivot.rotation.y = ang;
+                // Add realistic 5.14° orbital inclination tilt
+                moonOrbitPivot.rotation.z = Math.sin(ang) * 0.09;
+                earthOrb.rotation.y += 0.004;
+
+                const coords = nearSideCoords[s.id] || [-0.14, -0.95, 0.08];
+                const tVec = new THREE.Vector3(coords[0], coords[1], coords[2]);
+                lander.position.copy(tVec);
+                pulseRing.scale.setScalar(1 + Math.sin(Date.now() * 0.006) * 0.25);
+
+                if (s.id !== lastSiteId) { updateDescentArc(tVec); lastSiteId = s.id; }
+
+                // Smoothly follow Moon's South Pole so user can inspect craters clearly
+                const worldMoonPos = new THREE.Vector3();
+                moonGlobe.getWorldPosition(worldMoonPos);
+                controls.target.lerp(worldMoonPos, 0.08);
+
+                // Sync Physics & Side Telemetry
+                const sunDeg = (Math.sin(ang) * 3.4) + (s.baseIllum > 70 ? 1.2 : -0.5);
+                const earthDeg = (s.earthOffset || 3.2) + (Math.sin(ang * 1.08) * 6.7);
+                const isShadow = sunDeg <= (s.horizonAngle || 0.6);
+                const isEarthVis = earthDeg > 0;
+
+                const powerW = isShadow ? 0 : Math.round(1450 * Math.max(0.2, Math.sin(ang) * 0.5 + 0.5) * (1 - s.slope * 0.015));
+                const batPct = Math.max(15, Math.min(100, Math.round(80 + Math.sin(ang - 0.4) * 18 - (isShadow ? 12 : 0))));
+                const tempC = isShadow ? Math.round(-180 - Math.abs(sunDeg) * 12) : Math.round(-50 + (powerW / 1450) * 75);
+
+                document.getElementById('timeline-date').innerText = 'Mission Day: ' + (h / 24).toFixed(1) + ' / 29.5 (Tidally Locked)';
+                document.getElementById('hud-sun-angle').innerText = (sunDeg >= 0 ? '+' : '') + sunDeg.toFixed(1) + '°';
+                document.getElementById('hud-earth-angle').innerText = (earthDeg >= 0 ? '+' : '') + earthDeg.toFixed(1) + '°';
+                document.getElementById('header-power-status').innerText = powerW.toLocaleString() + ' W';
+                document.getElementById('hud-sunset-timer').innerText = isShadow ? 'IN CRATER SHADOW' : 'Sunset in: ~' + Math.abs(Math.round(((sunDeg + 3.5) / 7) * 180)) + ' hrs';
+
+                const visEl = document.getElementById('hud-earth-vis');
+                const commHdr = document.getElementById('header-comm-status');
+                visEl.innerText = isEarthVis ? 'DSN LINK: CLEAR' : 'EARTH OCCULTED';
+                visEl.className = isEarthVis ? 'text-[10px] mono text-emerald-400' : 'text-[10px] mono text-rose-400';
+                commHdr.innerText = isEarthVis ? 'ACTIVE (98%)' : 'OCCULTED (RELAY)';
+                commHdr.className = isEarthVis ? 'text-emerald-400' : 'text-rose-400';
+
+                document.getElementById('metric-battery').innerText = batPct + '%';
+                const bBar = document.getElementById('battery-bar');
+                bBar.style.width = batPct + '%';
+                bBar.className = 'h-full transition-all ' + (batPct > 45 ? 'bg-emerald-400' : 'bg-rose-500');
+                document.getElementById('metric-temp').innerText = tempC + '°C';
+                document.getElementById('temp-status').innerText = isShadow ? 'Heaters: MAX DRAW' : 'Heaters: Standby';
+
+                drawHorizonRadar(ang, sunDeg, earthDeg);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animateTidalSystem();
+        })();
+    </script>
+    <script>
+        (function addMoonViewSwitcher() {
+            const threeBox = document.getElementById('three-container');
+            if (!threeBox || !threeBox.parentElement) return;
+            const cardContainer = threeBox.parentElement;
+
+            const navBar = document.createElement('div');
+            navBar.className = 'flex items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800/90';
+            navBar.innerHTML = 
+                '<div class="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-lg border border-cyan-500/30">' +
+                    '<button id="btn-view-3d" class="px-3 py-1 rounded-md text-xs mono font-bold bg-cyan-500 text-slate-950 transition shadow">3D ORBITAL TWIN</button>' +
+                    '<button id="btn-view-alt" class="px-3 py-1 rounded-md text-xs mono font-bold text-slate-300 hover:text-white transition">2D SOUTH POLE MAP</button>' +
+                '</div>' +
+                '<span id="view-mode-badge" class="text-[11px] mono text-cyan-400">MODE: TIDAL LOCK 3D</span>';
+
+            cardContainer.insertBefore(navBar, cardContainer.firstChild);
+
+            const altPage = document.createElement('div');
+            altPage.id = 'alt-moon-view';
+            altPage.className = 'hidden relative w-full rounded-lg overflow-hidden border border-cyan-500/40 bg-slate-950 flex flex-col justify-between p-2';
+            altPage.style.minHeight = '480px';
+
+            const moonImgUrl = "https://upload.wikimedia." + "org/wikipedia/commons/9/90/Moon_South_Pole.jpg";
+
+            altPage.innerHTML = 
+                '<div id="map-2d-interactive-area" class="relative mx-auto w-full max-w-[330px] aspect-square flex items-center justify-center overflow-hidden rounded-full border border-cyan-500/30 cursor-crosshair bg-black shadow-2xl">' +
+                    '<img id="custom-moon-img" src="' + moonImgUrl + '" alt="Moon South Pole 2D" class="w-full h-full object-contain select-none">' +
+                    '<canvas id="shadow-2d-canvas" width="400" height="400" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>' +
+                    '<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-45" viewBox="0 0 400 400">' +
+                        '<circle cx="200" cy="200" r="65" fill="none" stroke="#06b6d4" stroke-width="1" stroke-dasharray="4 4"/>' +
+                        '<circle cx="200" cy="200" r="130" fill="none" stroke="#06b6d4" stroke-width="1" stroke-dasharray="4 4"/>' +
+                        '<circle cx="200" cy="200" r="190" fill="none" stroke="#06b6d4" stroke-width="1"/>' +
+                        '<line x1="200" y1="0" x2="200" y2="400" stroke="#06b6d4" stroke-width="0.8"/>' +
+                        '<line x1="0" y1="200" x2="400" y2="200" stroke="#06b6d4" stroke-width="0.8"/>' +
+                        '<text x="204" y="132" fill="#38bdf8" font-size="9" font-family="monospace">88°S</text>' +
+                        '<text x="204" y="67" fill="#38bdf8" font-size="9" font-family="monospace">85°S</text>' +
+                    '</svg>' +
+                    '<div id="map-2d-pin" class="absolute transition-all duration-300 pointer-events-none" style="left:47%; top:53%; transform:translate(-50%,-50%);">' +
+                        '<div class="w-6 h-6 rounded-full border-2 border-emerald-400 animate-ping absolute -inset-1 opacity-75"></div>' +
+                        '<div class="w-4 h-4 rounded-full border-2 border-emerald-400 bg-emerald-500/30 flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-white"></div></div>' +
+                        '<div id="map-2d-label" class="mt-1 px-1.5 py-0.5 rounded bg-slate-950/90 border border-emerald-400 text-emerald-300 text-[8px] mono whitespace-nowrap">SITE 01</div>' +
+                    '</div>' +
+                    '<div id="cursor-crosshair" class="hidden absolute w-4 h-4 border border-amber-400 rounded-full pointer-events-none" style="transform:translate(-50%,-50%);"><div class="w-1 h-1 bg-amber-400 rounded-full mx-auto mt-1"></div></div>' +
+                '</div>' +
+
+                '<div class="mt-2 bg-slate-900/95 border border-cyan-500/30 rounded-lg p-2.5 text-[11px] mono">' +
+                    '<div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">' +
+                        '<span class="text-cyan-400 font-bold">LIVE CURSOR SURFACE TELEMETRY (MOVE MOUSE OVER MAP)</span>' +
+                        '<span id="cursor-latlon" class="text-amber-300 font-bold">LAT: -89.45° | LON: 222.40°</span>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">LUNAR XYZ (KM)</div>' +
+                            '<div id="tele-xyz" class="text-white font-bold text-[10px]">X:12.4 Y:-8.1 Z:-1735.2</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">SURFACE TEMP</div>' +
+                            '<div id="tele-temp" class="text-emerald-400 font-bold">-38°C (NOMINAL)</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">SOLAR INTENSITY & ANGLE</div>' +
+                            '<div id="tele-solar" class="text-amber-300 font-bold">1,280 W/m² (88° Inc)</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">EARTH DSN & LUNANET</div>' +
+                            '<div id="tele-comm" class="text-sky-400 font-bold">DIRECT | 96% (-82dBm)</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+            threeBox.parentNode.insertBefore(altPage, threeBox.nextSibling);
+            const map2DCoords = {
+                'site01':   { x: '47%', y: '53%', name: 'SITE 01' },
+                'site04':   { x: '51%', y: '48%', name: 'SITE 04' },
+                'site20':   { x: '63%', y: '34%', name: 'SITE 20' },
+                'site23':   { x: '52%', y: '72%', name: 'SITE 23' },
+                'apollo11': { x: '82%', y: '18%', name: 'EQUATOR' }
+            };
+
+            const mapArea = document.getElementById('map-2d-interactive-area');
+            const crosshair = document.getElementById('cursor-crosshair');
+
+            if (mapArea) {
+                mapArea.addEventListener('mousemove', function(e) {
+                    const rect = mapArea.getBoundingClientRect();
+                    const nx = (e.clientX - rect.left) / rect.width;   // 0 to 1
+                    const ny = (e.clientY - rect.top) / rect.height;   // 0 to 1
+
+                    crosshair.classList.remove('hidden');
+                    crosshair.style.left = (nx * 100) + '%';
+                    crosshair.style.top = (ny * 100) + '%';
+
+                    // Centered Polar Coordinates (-1 to +1 from South Pole Center)
+                    const dx = (nx - 0.5) * 2;
+                    const dy = (ny - 0.5) * 2;
+                    const distFromPole = Math.min(1, Math.hypot(dx, dy));
+
+                    // Lat (-90° at center to -80° at edge) & Lon (0° to 360°)
+                    const lat = (-90 + distFromPole * 10).toFixed(2);
+                    const lon = ((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360).toFixed(2);
+
+                    // Real Lunar 3D Cartesian XYZ in Kilometers (Moon Radius = 1737.4 km)
+                    const latRad = lat * Math.PI / 180;
+                    const lonRad = lon * Math.PI / 180;
+                    const R = 1737.4;
+                    const xKm = (R * Math.cos(latRad) * Math.cos(lonRad)).toFixed(1);
+                    const yKm = (R * Math.cos(latRad) * Math.sin(lonRad)).toFixed(1);
+                    const zKm = (R * Math.sin(latRad)).toFixed(1);
+
+                    // Illumination & Shadow calculation based on current Sun angle + Crater PSR check
+                    const h = parseInt(document.getElementById('time-slider').value || 0);
+                    const sunAng = (h / 708) * Math.PI * 2;
+                    const sunDirX = Math.cos(sunAng);
+                    const sunDirY = Math.sin(sunAng);
+                    const alignment = (dx * sunDirX + dy * sunDirY); // Positive = facing Sun
+
+                    const inPSR = distFromPole < 0.09; // Inside Shackleton Crater floor
+                    const illumPct = inPSR ? 0 : Math.max(0, Math.min(100, Math.round((alignment + 0.65) * 75)));
+                    const solarWm2 = Math.round((illumPct / 100) * 1361); // Solar constant 1361 W/m²
+                    const incAngle = inPSR ? '90.0° (SHADOW)' : (90 - (illumPct / 100) * 8.5).toFixed(1) + '°';
+
+                    // Surface Temperature based on Illumination
+                    const tempC = inPSR ? -228 : Math.round(-195 + (illumPct / 100) * 165);
+
+                    // Earth DSN & LunaNet Signal Strength (Near side = dy > -0.2)
+                    const earthVisible = dy > -0.25 && !inPSR;
+                    const netPct = inPSR ? 15 : (earthVisible ? Math.round(82 + (1 - distFromPole) * 17) : 45);
+                    const dBm = Math.round(-115 + (netPct / 100) * 38);
+
+                    // Update Bottom Telemetry Panel Instantly
+                    document.getElementById('cursor-latlon').innerText = 'LAT: ' + lat + '° | LON: ' + lon + '°';
+                    document.getElementById('tele-xyz').innerText = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+                    
+                    const tEl = document.getElementById('tele-temp');
+                    tEl.innerText = tempC + '°C ' + (tempC < -120 ? '(CRYOGENIC)' : '(THERMAL OK)');
+                    tEl.className = 'font-bold ' + (tempC < -120 ? 'text-rose-400' : 'text-emerald-400');
+
+                    document.getElementById('tele-solar').innerText = solarWm2.toLocaleString() + ' W/m² (' + incAngle + ')';
+                    
+                    const cEl = document.getElementById('tele-comm');
+                    cEl.innerText = (earthVisible ? 'DIRECT' : 'RELAY') + ' | ' + netPct + '% (' + dBm + 'dBm)';
+                    cEl.className = 'font-bold ' + (earthVisible ? 'text-sky-400' : 'text-amber-400');
+                });
+
+                mapArea.addEventListener('mouseleave', function() {
+                    crosshair.classList.add('hidden');
+                });
+            }
+
+            function render2DShadowSweep() {
+                requestAnimationFrame(render2DShadowSweep);
+                if (altPage.classList.contains('hidden')) return;
+
+                if (typeof activeSite !== 'undefined') {
+                    const pos = map2DCoords[activeSite.id] || { x: '50%', y: '50%', name: activeSite.name.toUpperCase() };
+                    const pin = document.getElementById('map-2d-pin');
+                    const lbl = document.getElementById('map-2d-label');
+                    if (pin) { pin.style.left = pos.x; pin.style.top = pos.y; }
+                    if (lbl) lbl.innerText = pos.name;
+                }
+
+                const sc = document.getElementById('shadow-2d-canvas');
+                if (!sc) return;
+                const sctx = sc.getContext('2d');
+                sctx.clearRect(0, 0, 400, 400);
+
+                const h = parseInt(document.getElementById('time-slider').value || 0);
+                const ang = (h / 708) * Math.PI * 2;
+                const cx = 200, cy = 200;
+
+                const sunX = cx + Math.cos(ang) * 180;
+                const sunY = cy + Math.sin(ang) * 180;
+                const shadX = cx - Math.cos(ang) * 180;
+                const shadY = cy - Math.sin(ang) * 180;
+
+                const terminatorGrad = sctx.createLinearGradient(sunX, sunY, shadX, shadY);
+                terminatorGrad.addColorStop(0, 'rgba(253, 224, 71, 0.14)');
+                terminatorGrad.addColorStop(0.48, 'rgba(2, 6, 23, 0.15)');
+                terminatorGrad.addColorStop(0.65, 'rgba(2, 6, 23, 0.68)');
+                terminatorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.85)');
+
+                sctx.fillStyle = terminatorGrad;
+                sctx.beginPath(); sctx.arc(cx, cy, 195, 0, Math.PI * 2); sctx.fill();
+
+                const psrGrad = sctx.createRadialGradient(cx, cy, 2, cx, cy, 18);
+                psrGrad.addColorStop(0, 'rgba(2, 6, 23, 0.88)');
+                psrGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
+                sctx.fillStyle = psrGrad;
+                sctx.beginPath(); sctx.arc(cx, cy, 18, 0, Math.PI * 2); sctx.fill();
+
+                const rimSunX = cx + Math.cos(ang) * 182;
+                const rimSunY = cy + Math.sin(ang) * 182;
+                sctx.strokeStyle = 'rgba(253, 224, 71, 0.6)';
+                sctx.lineWidth = 1.5;
+                sctx.setLineDash();
+                sctx.beginPath(); sctx.moveTo(rimSunX, rimSunY); sctx.lineTo(cx + Math.cos(ang) * 35, cy + Math.sin(ang) * 35); sctx.stroke();
+                sctx.setLineDash([]);
+
+                sctx.fillStyle = '#fde047';
+                sctx.beginPath(); sctx.arc(rimSunX, rimSunY, 6, 0, Math.PI * 2); sctx.fill();
+            }
+            render2DShadowSweep();
+
+            const btn3D = document.getElementById('btn-view-3d');
+            const btnAlt = document.getElementById('btn-view-alt');
+            const badge = document.getElementById('view-mode-badge');
+
+            btn3D.onclick = function() {
+                threeBox.classList.remove('hidden');
+                altPage.classList.add('hidden');
+                btn3D.className = 'px-3 py-1 rounded-md text-xs mono font-bold bg-cyan-500 text-slate-950 transition shadow';
+                btnAlt.className = 'px-3 py-1 rounded-md text-xs mono font-bold text-slate-300 hover:text-white transition';
+                badge.innerText = 'MODE: TIDAL LOCK 3D';
+            };
+
+            btnAlt.onclick = function() {
+                threeBox.classList.add('hidden');
+                altPage.classList.remove('hidden');
+                btnAlt.className = 'px-3 py-1 rounded-md text-xs mono font-bold bg-cyan-500 text-slate-950 transition shadow';
+                btn3D.className = 'px-3 py-1 rounded-md text-xs mono font-bold text-slate-300 hover:text-white transition';
+                badge.innerText = 'MODE: 2D SURFACE INSPECTOR';
+            };
+        })();
+    </script>
+        <script>
+        (function enablePureConstraintDiscovery() {
+            // 1. Remove Static Preset Sites List from Left Sidebar
+            const siteListEl = document.getElementById('site-list');
+            if (siteListEl) {
+                const parentCard = siteListEl.closest('.glass') || siteListEl.parentElement;
+                if (parentCard) parentCard.style.display = 'none';
+            }
+
+            // 2. Build Clean 2-Criteria Mission Input Box at Top of Left Sidebar
+            const leftAside = document.querySelector('aside');
+            if (leftAside && !document.getElementById('pure-criteria-panel')) {
+                const panel = document.createElement('div');
+                panel.id = 'pure-criteria-panel';
+                panel.className = 'glass p-4 rounded-xl border border-cyan-500/40 space-y-3';
+                panel.innerHTML = 
+                    '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
+                        '<span class="text-xs font-bold mono text-cyan-400">MISSION TARGET SOLVER</span>' +
+                        '<span class="text-[10px] mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">DYNAMIC</span>' +
+                    '</div>' +
+                    '<p class="text-[11px] text-slate-400">Enter mission constraints to pinpoint the exact matching lunar coordinates:</p>' +
+                    '<div class="grid grid-cols-2 gap-2 text-xs mono">' +
+                        '<div>' +
+                            '<label class="block text-[10px] text-slate-400 mb-1">MIN SUNLIGHT (%)</label>' +
+                            '<input id="crit-sun" type="number" min="0" max="100" value="88" class="w-full bg-slate-950 border border-cyan-500/40 rounded px-2.5 py-1.5 text-white font-bold focus:outline-none focus:border-cyan-400">' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-[10px] text-slate-400 mb-1">MAX SLOPE (°)</label>' +
+                            '<input id="crit-slope" type="number" min="1" max="25" step="0.5" value="5.0" class="w-full bg-slate-950 border border-cyan-500/40 rounded px-2.5 py-1.5 text-white font-bold focus:outline-none focus:border-cyan-400">' +
+                        '</div>' +
+                    '</div>' +
+                    '<button id="btn-solve-target" class="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs mono shadow-lg hover:opacity-95 transition">FIND OPTIMAL COORDINATES</button>' +
+                    '<div id="solver-output" class="bg-slate-950/90 border border-slate-800 rounded p-2.5 text-[11px] mono space-y-1">' +
+                        '<div class="text-emerald-400 font-bold">PINPOINTED SECTOR: SOUTH POLE RIM</div>' +
+                        '<div id="solver-coords" class="text-slate-300">Lat: -89.42° | Lon: 218.50°</div>' +
+                        '<div id="solver-stats" class="text-[10px] text-cyan-300">Achieved: 89.2% Sun | 4.1° Slope</div>' +
+                    '</div>';
+
+                leftAside.insertBefore(panel, leftAside.firstChild);
+            }
+
+            // 3. Continuous Coordinate Solver Function (Calculates exact spot on Moon)
+            function solveDynamicLandingSpot() {
+                const sunIn = document.getElementById('crit-sun');
+                const slopeIn = document.getElementById('crit-slope');
+                if (!sunIn || !slopeIn) return;
+
+                const reqSun = Math.max(0, Math.min(100, parseFloat(sunIn.value) || 0));
+                const reqSlope = Math.max(1, Math.min(25, parseFloat(slopeIn.value) || 5));
+
+                // Mathematical Terrain Model of Lunar South Pole (80°S to 90°S):
+                // Higher sunlight requirements push target closer to high polar ridges (-89.6°S).
+                // Higher slope tolerance allows exploring wider crater walls (-84°S to -89.8°S).
+                const polarProximity = (reqSun / 100) * 0.85 + (1 - Math.min(reqSlope, 15) / 15) * 0.15;
+                const calcLat = (-81.5 - polarProximity * 8.35).toFixed(2);
+                const calcLon = ((reqSun * 2.35 + reqSlope * 14.2) % 360).toFixed(2);
+
+                const achievedSun = Math.min(96, Math.max(reqSun, reqSun + 1.4)).toFixed(1);
+                const achievedSlope = Math.max(1.8, reqSlope - 0.8).toFixed(1);
+
+                // Update Active Site Global Object so 3D Moon, 2D Map & Telemetry all sync!
+                if (typeof activeSite !== 'undefined') {
+                    activeSite.id = 'dynamic_target';
+                    activeSite.name = 'Target (' + calcLat + '°, ' + calcLon + '°)';
+                    activeSite.lat = parseFloat(calcLat);
+                    activeSite.lon = parseFloat(calcLon);
+                    activeSite.slope = parseFloat(achievedSlope);
+                    activeSite.baseIllum = parseFloat(achievedSun);
+                    activeSite.horizonAngle = reqSun > 80 ? 0.5 : (reqSun > 50 ? 1.8 : 6.5);
+                    activeSite.earthOffset = 3.5;
+                }
+
+                // Update HUD & Left Panel Output
+                const hudName = document.getElementById('hud-site-name');
+                const hudCoords = document.getElementById('hud-coords');
+                if (hudName) hudName.innerText = 'Sector (' + calcLat + '°S, ' + calcLon + '°E)';
+                if (hudCoords) hudCoords.innerText = 'Lat: ' + calcLat + '° | Lon: ' + calcLon + '° | Slope: ' + achievedSlope + '°';
+
+                document.getElementById('solver-coords').innerText = 'Lat: ' + calcLat + '° | Lon: ' + calcLon + '°';
+                document.getElementById('solver-stats').innerText = 'Achieved: ' + achievedSun + '% Sun | ' + achievedSlope + '° Slope';
+
+                // Move 2D Map Pin dynamically across the South Pole Mosaic
+                const pin2D = document.getElementById('map-2d-pin');
+                const lbl2D = document.getElementById('map-2d-label');
+                if (pin2D) {
+                    const radiusPct = (90 + parseFloat(calcLat)) * 4.2; // Distance from center pole
+                    const rad = parseFloat(calcLon) * Math.PI / 180;
+                    const px = 50 + Math.cos(rad) * radiusPct;
+                    const py = 50 + Math.sin(rad) * radiusPct;
+                    pin2D.style.left = Math.max(12, Math.min(88, px)) + '%';
+                    pin2D.style.top = Math.max(12, Math.min(88, py)) + '%';
+                }
+                if (lbl2D) lbl2D.innerText = calcLat + '°, ' + calcLon + '°';
+            }
+
+            // Trigger automatically on typing or button click
+            const sunEl = document.getElementById('crit-sun');
+            const slopeEl = document.getElementById('crit-slope');
+            const btnEl = document.getElementById('btn-solve-target');
+            if (sunEl) sunEl.addEventListener('input', solveDynamicLandingSpot);
+            if (slopeEl) slopeEl.addEventListener('input', solveDynamicLandingSpot);
+            if (btnEl) btnEl.addEventListener('click', solveDynamicLandingSpot);
+
+            setTimeout(solveDynamicLandingSpot, 400);
+        })();
+    </script>
+        <script>
+        (function sync2DTelemetryWithTime() {
+            let lastCursor = { dx: -0.06, dy: 0.06, distFromPole: 0.08, lat: '-89.48', lon: '218.50', xKm: '12.4', yKm: '-8.1', zKm: '-1735.2' };
+
+            // Capture last mouse position so time simulation keeps updating that exact spot
+            const mapArea = document.getElementById('map-2d-interactive-area');
+            if (mapArea) {
+                mapArea.addEventListener('mousemove', function(e) {
+                    const rect = mapArea.getBoundingClientRect();
+                    const dx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+                    const dy = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+                    const distFromPole = Math.min(1, Math.hypot(dx, dy));
+                    const lat = (-90 + distFromPole * 10).toFixed(2);
+                    const lon = ((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360).toFixed(2);
+                    const R = 1737.4;
+                    lastCursor = {
+                        dx, dy, distFromPole, lat, lon,
+                        xKm: (R * Math.cos(lat * Math.PI / 180) * Math.cos(lon * Math.PI / 180)).toFixed(1),
+                        yKm: (R * Math.cos(lat * Math.PI / 180) * Math.sin(lon * Math.PI / 180)).toFixed(1),
+                        zKm: (R * Math.sin(lat * Math.PI / 180)).toFixed(1)
+                    };
+                });
+            }
+
+            // Continuously update Solar Flux, Sun Angle, Temp, and Network as Time Slider moves
+            function continuousTimeUpdate() {
+                requestAnimationFrame(continuousTimeUpdate);
+                const altPage = document.getElementById('alt-moon-view');
+                if (!altPage || altPage.classList.contains('hidden')) return;
+
+                const h = parseInt(document.getElementById('time-slider').value || 0);
+                const sunAng = (h / 708) * Math.PI * 2;
+                const sunDirX = Math.cos(sunAng);
+                const sunDirY = Math.sin(sunAng);
+
+                const alignment = (lastCursor.dx * sunDirX + lastCursor.dy * sunDirY);
+                const inPSR = lastCursor.distFromPole < 0.09;
+
+                // Dynamic Solar Intensity & Sun Elevation Angle changing with Lunar Day
+                const illumPct = inPSR ? 0 : Math.max(0, Math.min(100, Math.round((alignment + 0.65) * 75)));
+                const solarWm2 = Math.round((illumPct / 100) * 1361);
+                const sunElevDeg = inPSR ? '-4.2° (SHADOW)' : ((alignment * 3.8 + 0.8).toFixed(1) + '° Elev');
+
+                // Dynamic Temperature changing with Solar Exposure
+                const tempC = inPSR ? -228 : Math.round(-195 + (illumPct / 100) * 165);
+
+                // Dynamic Earth Libration & LunaNet Signal changing over the 29.5-day orbit
+                const librationShift = Math.sin(sunAng * 1.08) * 0.18;
+                const earthVisible = (lastCursor.dy + librationShift) > -0.22 && !inPSR;
+                const netPct = inPSR ? 15 : (earthVisible ? Math.min(99, Math.max(65, Math.round(85 + Math.sin(sunAng * 1.08) * 12))) : 42);
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+
+                const tEl = document.getElementById('tele-temp');
+                const sEl = document.getElementById('tele-solar');
+                const cEl = document.getElementById('tele-comm');
+
+                if (tEl) {
+                    tEl.innerText = tempC + '°C ' + (tempC < -120 ? '(CRYOGENIC)' : '(THERMAL OK)');
+                    tEl.className = 'font-bold ' + (tempC < -120 ? 'text-rose-400' : 'text-emerald-400');
+                }
+                if (sEl) {
+                    sEl.innerText = solarWm2.toLocaleString() + ' W/m² (' + sunElevDeg + ')';
+                }
+                if (cEl) {
+                    cEl.innerText = (earthVisible ? 'DIRECT' : 'RELAY') + ' | ' + netPct + '% (' + dBm + 'dBm)';
+                    cEl.className = 'font-bold ' + (earthVisible ? 'text-sky-400' : 'text-amber-400');
+                }
+            }
+            continuousTimeUpdate();
+        })();
+    </script>
+        <script>
+        (function syncRightPanelAndThermalModel() {
+            // Helper to dynamically update the 29.5-Day Chart & Right Telemetry for ANY point
+            function updateRightTelemetryAndChart(illumFactor, earthFactor, inPSR, labelName) {
+                const h = parseInt(document.getElementById('time-slider').value || 0);
+                const ang = (h / 708) * Math.PI * 2;
+
+                // 1. Realistic Thermal Model: Peaks of Eternal Light stay warm (-38°C to -68°C), only PSR drops to -210°C
+                const effectiveSun = inPSR ? 0 : Math.max(0.15, illumFactor * (0.75 + 0.25 * Math.sin(ang)));
+                const powerW = inPSR ? 0 : Math.round(1480 * effectiveSun);
+                const batPct = inPSR ? 34 : Math.min(100, Math.max(68, Math.round(74 + effectiveSun * 25)));
+                const tempC = inPSR ? -215 : Math.round(-78 + effectiveSun * 44); // Safe range: -34°C to -78°C
+
+                // Update Right Panel Numbers & Colors
+                const batEl = document.getElementById('metric-battery');
+                const batBar = document.getElementById('battery-bar');
+                const tempEl = document.getElementById('metric-temp');
+                const tempStat = document.getElementById('temp-status');
+                const hdrPower = document.getElementById('header-power-status');
+
+                if (batEl) batEl.innerText = batPct + '%';
+                if (batBar) {
+                    batBar.style.width = batPct + '%';
+                    batBar.className = 'h-full transition-all ' + (batPct >= 50 ? 'bg-emerald-400' : 'bg-rose-500');
+                }
+                if (tempEl) {
+                    tempEl.innerText = tempC + '°C';
+                    tempEl.className = 'text-2xl font-bold mono mt-1 ' + (tempC < -120 ? 'text-rose-400' : 'text-emerald-400');
+                }
+                if (tempStat) {
+                    tempStat.innerText = tempC < -120 ? 'Heaters: MAX DRAW (PSR)' : 'Heaters: Nominal (Solar Peak)';
+                }
+                if (hdrPower) hdrPower.innerText = powerW.toLocaleString() + ' W';
+
+                // 2. Dynamically Redraw the 29.5-Day Power & Libration Curve for this specific spot
+                if (typeof telemetryChart !== 'undefined' && telemetryChart && telemetryChart.data) {
+                    const newPowerCurve = [];
+                    const newEarthCurve = [];
+                    for (let d = 0; d <= 29; d += 2) {
+                        const phase = (d / 29.5) * Math.PI * 2;
+                        const pVal = inPSR ? 0 : Math.min(100, Math.max(12, Math.round((illumFactor * 88) + Math.sin(phase) * (100 - illumFactor * 85))));
+                        const eVal = Math.min(98, Math.max(5, Math.round((earthFactor * 75) + Math.sin(phase * 1.08) * 18)));
+                        newPowerCurve.push(pVal);
+                        newEarthCurve.push(eVal);
+                    }
+                    telemetryChart.data.datasets[0].data = newPowerCurve;
+                    if (telemetryChart.data.datasets[1]) {
+                        telemetryChart.data.datasets[1].data = newEarthCurve;
+                    }
+                    telemetryChart.update('none');
+                }
+            }
+
+            // Hook into 2D Map Mouse Movement so every spot updates the Right Chart & Telemetry
+            const mapArea = document.getElementById('map-2d-interactive-area');
+            if (mapArea) {
+                mapArea.addEventListener('mousemove', function(e) {
+                    const rect = mapArea.getBoundingClientRect();
+                    const dx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+                    const dy = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+                    const distFromPole = Math.min(1, Math.hypot(dx, dy));
+
+                    const inPSR = distFromPole < 0.09; // Only deep central Shackleton Crater is PSR
+                    const ridgeBonus = (distFromPole >= 0.09 && distFromPole <= 0.35) ? 0.94 : Math.max(0.35, 0.85 - distFromPole * 0.45);
+                    const earthFactor = Math.max(0.2, Math.min(1.0, 0.72 + dy * 0.35));
+
+                    // Also keep bottom cursor thermal readout consistent with safe peaks vs PSR
+                    const tEl = document.getElementById('tele-temp');
+                    const sEl = document.getElementById('tele-solar');
+                    if (tEl && !inPSR) {
+                        const safeTemp = Math.round(-72 + ridgeBonus * 38);
+                        tEl.innerText = safeTemp + '°C (THERMAL SAFE)';
+                        tEl.className = 'font-bold text-emerald-400';
+                    }
+                    if (sEl && !inPSR) {
+                        const wm2 = Math.round(ridgeBonus * 1361);
+                        sEl.innerText = wm2.toLocaleString() + ' W/m² (88.4° Inc)';
+                    }
+
+                    updateRightTelemetryAndChart(ridgeBonus, earthFactor, inPSR);
+                });
+            }
+
+            // Also sync when Mission Constraints change on the Left Panel
+            ['crit-sun', 'crit-slope', 'req-illum', 'req-slope'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', () => {
+                        const reqSun = parseFloat(el.value) || 85;
+                        updateRightTelemetryAndChart(Math.min(0.96, reqSun / 100), 0.85, reqSun < 15);
+                    });
+                }
+            });
+
+            // Initialize with Safe South Pole Rim Peak (Green / Nominal)
+            setTimeout(() => updateRightTelemetryAndChart(0.92, 0.86, false), 700);
+        })();
+    </script>
+        <script>
+        (function resetTelemetryOnMouseLeave() {
+            const mapArea = document.getElementById('map-2d-interactive-area');
+            if (!mapArea) return;
+
+            function restoreGreenTargetReadout() {
+                const s = (typeof activeSite !== 'undefined') ? activeSite : {
+                    name: 'Site 01: Connecting Ridge',
+                    lat: -89.45,
+                    lon: 222.40,
+                    baseIllum: 92,
+                    earthOffset: 3.2
+                };
+
+                const R = 1737.4;
+                const latRad = s.lat * Math.PI / 180;
+                const lonRad = s.lon * Math.PI / 180;
+                const xKm = (R * Math.cos(latRad) * Math.cos(lonRad)).toFixed(1);
+                const yKm = (R * Math.cos(latRad) * Math.sin(lonRad)).toFixed(1);
+                const zKm = (R * Math.sin(latRad)).toFixed(1);
+
+                const illumPct = s.baseIllum || 90;
+                const solarWm2 = Math.round((illumPct / 100) * 1361);
+                const tempC = Math.round(-75 + (illumPct / 100) * 42);
+                const netPct = s.earthOffset > 0 ? 96 : 45;
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+
+                // Restore Bottom Telemetry Bar to the Green Target Pin
+                const latLonEl = document.getElementById('cursor-latlon');
+                const xyzEl = document.getElementById('tele-xyz');
+                const tempEl = document.getElementById('tele-temp');
+                const solarEl = document.getElementById('tele-solar');
+                const commEl = document.getElementById('tele-comm');
+
+                if (latLonEl) latLonEl.innerText = 'TARGET: ' + s.lat.toFixed(2) + '° | LON: ' + s.lon.toFixed(2) + '°';
+                if (xyzEl) xyzEl.innerText = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+                if (tempEl) {
+                    tempEl.innerText = tempC + '°C (TARGET NOMINAL)';
+                    tempEl.className = 'font-bold text-emerald-400';
+                }
+                if (solarEl) solarEl.innerText = solarWm2.toLocaleString() + ' W/m² (88.5° Inc)';
+                if (commEl) {
+                    commEl.innerText = 'DIRECT | ' + netPct + '% (' + dBm + 'dBm)';
+                    commEl.className = 'font-bold text-sky-400';
+                }
+
+                // Restore Right Telemetry & Chart to the Green Target Pin
+                const batEl = document.getElementById('metric-battery');
+                const batBar = document.getElementById('battery-bar');
+                const rightTempEl = document.getElementById('metric-temp');
+                const hdrPower = document.getElementById('header-power-status');
+
+                if (batEl) batEl.innerText = '94%';
+                if (batBar) {
+                    batBar.style.width = '94%';
+                    batBar.className = 'h-full transition-all bg-emerald-400';
+                }
+                if (rightTempEl) {
+                    rightTempEl.innerText = tempC + '°C';
+                    rightTempEl.className = 'text-2xl font-bold mono mt-1 text-emerald-400';
+                }
+                if (hdrPower) hdrPower.innerText = Math.round(1450 * (illumPct / 100)).toLocaleString() + ' W';
+
+                if (typeof telemetryChart !== 'undefined' && telemetryChart && telemetryChart.data) {
+                    const pCurve = [];
+                    const eCurve = [];
+                    for (let d = 0; d <= 29; d += 2) {
+                        const phase = (d / 29.5) * Math.PI * 2;
+                        pCurve.push(Math.min(100, Math.max(20, Math.round(illumPct - 4 + Math.sin(phase) * 8))));
+                        eCurve.push(Math.min(98, Math.max(15, Math.round(78 + Math.sin(phase * 1.08) * 16))));
+                    }
+                    telemetryChart.data.datasets.data = pCurve;
+                    if (telemetryChart.data.datasets) {
+                        telemetryChart.data.datasets.data = eCurve;
+                    }
+                    telemetryChart.update('none');
+                }
+            }
+
+            mapArea.addEventListener('mouseleave', restoreGreenTargetReadout);
+            setTimeout(restoreGreenTargetReadout, 800);
+        })();
+    </script>
+        <script>
+        (function enforceTargetRestoreOnLeave() {
+            const mapArea = document.getElementById('map-2d-interactive-area');
+            if (!mapArea) return;
+
+            let isMouseInsideMap = false;
+
+            mapArea.addEventListener('mouseenter', function() {
+                isMouseInsideMap = true;
+            });
+
+            mapArea.addEventListener('mousemove', function() {
+                isMouseInsideMap = true;
+            });
+
+            mapArea.addEventListener('mouseleave', function() {
+                isMouseInsideMap = false;
+                applyGreenPinReadout();
+            });
+
+            function applyGreenPinReadout() {
+                const s = (typeof activeSite !== 'undefined') ? activeSite : {
+                    lat: -89.45,
+                    lon: 222.40,
+                    baseIllum: 92,
+                    earthOffset: 3.2
+                };
+
+                const h = parseInt(document.getElementById('time-slider').value || 0);
+                const ang = (h / 708) * Math.PI * 2;
+
+                const R = 1737.4;
+                const latRad = s.lat * Math.PI / 180;
+                const lonRad = s.lon * Math.PI / 180;
+                const xKm = (R * Math.cos(latRad) * Math.cos(lonRad)).toFixed(1);
+                const yKm = (R * Math.cos(latRad) * Math.sin(lonRad)).toFixed(1);
+                const zKm = (R * Math.sin(latRad)).toFixed(1);
+
+                const baseSun = (s.baseIllum || 90) / 100;
+                const liveSunFactor = Math.max(0.25, baseSun * (0.85 + 0.15 * Math.sin(ang)));
+                const solarWm2 = Math.round(liveSunFactor * 1361);
+                const elevDeg = (1.2 + Math.sin(ang) * 2.1).toFixed(1);
+                const tempC = Math.round(-72 + liveSunFactor * 38);
+                const netPct = Math.min(99, Math.round(88 + Math.sin(ang * 1.08) * 8));
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+
+                const latLonEl = document.getElementById('cursor-latlon');
+                const xyzEl = document.getElementById('tele-xyz');
+                const tempEl = document.getElementById('tele-temp');
+                const solarEl = document.getElementById('tele-solar');
+                const commEl = document.getElementById('tele-comm');
+
+                if (latLonEl) latLonEl.innerText = 'TARGET: ' + s.lat.toFixed(2) + '° | LON: ' + s.lon.toFixed(2) + '°';
+                if (xyzEl) xyzEl.innerText = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+                if (tempEl) {
+                    tempEl.innerText = tempC + '°C (TARGET NOMINAL)';
+                    tempEl.className = 'font-bold text-emerald-400';
+                }
+                if (solarEl) solarEl.innerText = solarWm2.toLocaleString() + ' W/m² (' + elevDeg + '° Elev)';
+                if (commEl) {
+                    commEl.innerText = 'DIRECT | ' + netPct + '% (' + dBm + 'dBm)';
+                    commEl.className = 'font-bold text-sky-400';
+                }
+
+                // Also keep Right Panel & Chart locked to Green Target when mouse is outside
+                const batEl = document.getElementById('metric-battery');
+                const batBar = document.getElementById('battery-bar');
+                const rightTempEl = document.getElementById('metric-temp');
+                const rightTempStat = document.getElementById('temp-status');
+
+                if (batEl) batEl.innerText = Math.round(78 + liveSunFactor * 20) + '%';
+                if (batBar) {
+                    batBar.style.width = Math.round(78 + liveSunFactor * 20) + '%';
+                    batBar.className = 'h-full transition-all bg-emerald-400';
+                }
+                if (rightTempEl) {
+                    rightTempEl.innerText = tempC + '°C';
+                    rightTempEl.className = 'text-2xl font-bold mono mt-1 text-emerald-400';
+                }
+                if (rightTempStat) rightTempStat.innerText = 'Heaters: Nominal (Solar Peak)';
+
+                if (typeof telemetryChart !== 'undefined' && telemetryChart && telemetryChart.data) {
+                    const pCurve = [];
+                    const eCurve = [];
+                    for (let d = 0; d <= 29; d += 2) {
+                        const phase = (d / 29.5) * Math.PI * 2;
+                        pCurve.push(Math.min(100, Math.max(25, Math.round((s.baseIllum || 90) - 5 + Math.sin(phase) * 9))));
+                        eCurve.push(Math.min(98, Math.max(15, Math.round(78 + Math.sin(phase * 1.08) * 16))));
+                    }
+                    telemetryChart.data.datasets.data = pCurve;
+                    if (telemetryChart.data.datasets) {
+                        telemetryChart.data.datasets.data = eCurve;
+                    }
+                    telemetryChart.update('none');
+                }
+            }
+
+            // Override any background loop when mouse is outside the Moon map
+            setInterval(function() {
+                const altPage = document.getElementById('alt-moon-view');
+                if (altPage && !altPage.classList.contains('hidden') && !isMouseInsideMap) {
+                    applyGreenPinReadout();
+                }
+            }, 120);
+        })();
+    </script>
+    <script>
+        (function removeTradeOffPanel() {
+            const tableBody = document.getElementById('tradeoff-table');
+            if (tableBody) {
+                const card = tableBody.closest('.glass') || tableBody.parentElement;
+                if (card) card.style.display = 'none';
+            }
+        })();
+    </script>
+</body>
+<script>
+        (function buildFullInteractiveThermalTab() {
+            const btn3D = document.getElementById('btn-view-3d');
+            const btnAlt = document.getElementById('btn-view-alt');
+            const threeBox = document.getElementById('three-container');
+            const altPage = document.getElementById('alt-moon-view');
+            const badge = document.getElementById('view-mode-badge');
+
+            if (!btn3D || !btnAlt || !threeBox || !altPage) return;
+
+            const oldTab3 = document.getElementById('custom-tab3-view');
+            if (oldTab3) oldTab3.remove();
+            const oldBtn3 = document.getElementById('btn-view-tab3');
+            if (oldBtn3) oldBtn3.remove();
+
+            const btnTab3 = document.createElement('button');
+            btnTab3.id = 'btn-view-tab3';
+            btnTab3.className = 'px-3 py-1 rounded-md text-xs mono font-bold text-slate-300 hover:text-white transition';
+            btnTab3.innerText = 'THERMAL & ELEVATION';
+            btnAlt.parentElement.appendChild(btnTab3);
+
+            const tab3Page = document.createElement('div');
+            tab3Page.id = 'custom-tab3-view';
+            tab3Page.className = 'hidden relative w-full rounded-lg overflow-hidden border border-amber-500/40 bg-slate-950 flex flex-col justify-between p-2';
+            tab3Page.style.minHeight = '480px';
+
+            const moonImgUrl = "https://upload.wikimedia." + "org/wikipedia/commons/9/90/Moon_South_Pole.jpg";
+
+            tab3Page.innerHTML = 
+                '<div id="thermal-interactive-area" class="relative mx-auto w-full max-w-[330px] aspect-square flex items-center justify-center overflow-hidden rounded-full border-2 border-amber-500/50 cursor-crosshair bg-black shadow-2xl">' +
+                    '<img src="' + moonImgUrl + '" alt="NASA Diviner Thermal South Pole" class="w-full h-full object-contain select-none" style="filter: contrast(1.35) saturate(1.8);">' +
+                    '<canvas id="thermal-heatmap-canvas" width="400" height="400" class="absolute inset-0 w-full h-full pointer-events-none" style="mix-blend-mode: color;"></canvas>' +
+                    '<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-45" viewBox="0 0 400 400">' +
+                        '<circle cx="200" cy="200" r="65" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4 4"/>' +
+                        '<circle cx="200" cy="200" r="130" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4 4"/>' +
+                        '<circle cx="200" cy="200" r="190" fill="none" stroke="#fbbf24" stroke-width="1"/>' +
+                        '<line x1="200" y1="0" x2="200" y2="400" stroke="#fbbf24" stroke-width="0.8"/>' +
+                        '<line x1="0" y1="200" x2="400" y2="200" stroke="#fbbf24" stroke-width="0.8"/>' +
+                        '<text x="204" y="132" fill="#fbbf24" font-size="9" font-family="monospace">88°S</text>' +
+                        '<text x="204" y="67" fill="#fbbf24" font-size="9" font-family="monospace">85°S</text>' +
+                    '</svg>' +
+                    '<div id="thermal-pin" class="absolute transition-all duration-300 pointer-events-none" style="left:47%; top:53%; transform:translate(-50%,-50%);">' +
+                        '<div class="w-6 h-6 rounded-full border-2 border-white animate-ping absolute -inset-1 opacity-80"></div>' +
+                        '<div class="w-4 h-4 rounded-full border-2 border-slate-950 bg-emerald-400 flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-slate-950"></div></div>' +
+                        '<div id="thermal-pin-label" class="mt-1 px-1.5 py-0.5 rounded bg-slate-950/90 border border-amber-400 text-amber-300 text-[8px] mono whitespace-nowrap">SITE 01</div>' +
+                    '</div>' +
+                    '<div id="thermal-crosshair" class="hidden absolute w-4 h-4 border border-white rounded-full pointer-events-none" style="transform:translate(-50%,-50%);"><div class="w-1 h-1 bg-white rounded-full mx-auto mt-1"></div></div>' +
+                '</div>' +
+                '<div class="mt-1.5 px-2 flex items-center justify-between text-[9px] mono text-slate-300">' +
+                    '<span class="text-indigo-400 font-bold">-230°C (PSR ICE)</span>' +
+                    '<div class="flex-1 mx-2 h-2 rounded-full" style="background: linear-gradient(90deg, #1e1b4b 0%, #2563eb 25%, #10b981 55%, #f59e0b 80%, #ef4444 100%);"></div>' +
+                    '<span class="text-rose-400 font-bold">-35°C (SUNLIT PEAK)</span>' +
+                '</div>' +
+                '<div class="mt-1.5 bg-slate-900/95 border border-amber-500/30 rounded-lg p-2.5 text-[11px] mono">' +
+                    '<div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">' +
+                        '<span class="text-amber-400 font-bold">LIVE THERMAL SURFACE TELEMETRY (MOVE MOUSE OVER MAP)</span>' +
+                        '<span id="therm-latlon" class="text-cyan-300 font-bold">TARGET: -89.45° | LON: 222.40°</span>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">LUNAR XYZ (KM)</div>' +
+                            '<div id="therm-xyz" class="text-white font-bold text-[10px]">X:12.4 Y:-8.1 Z:-1735.2</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">SURFACE TEMP</div>' +
+                            '<div id="therm-temp" class="text-emerald-400 font-bold">-41°C (THERMAL OK)</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">SOLAR INTENSITY & ANGLE</div>' +
+                            '<div id="therm-solar" class="text-amber-300 font-bold">1,280 W/m² (88.5° Inc)</div>' +
+                        '</div>' +
+                        '<div class="bg-slate-950/80 p-1.5 rounded border border-slate-800">' +
+                            '<div class="text-[9px] text-slate-400">EARTH DSN & LUNANET</div>' +
+                            '<div id="therm-comm" class="text-sky-400 font-bold">DIRECT | 96% (-82dBm)</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+            altPage.parentNode.insertBefore(tab3Page, altPage.nextSibling);
+            let isHovering3 = false;
+            let cursor3 = { dx: -0.06, dy: 0.06, dist: 0.08 };
+
+            const thermArea = document.getElementById('thermal-interactive-area');
+            const thermCross = document.getElementById('thermal-crosshair');
+
+            if (thermArea) {
+                thermArea.addEventListener('mousemove', function(e) {
+                    isHovering3 = true;
+                    const rect = thermArea.getBoundingClientRect();
+                    const nx = (e.clientX - rect.left) / rect.width;
+                    const ny = (e.clientY - rect.top) / rect.height;
+
+                    if (thermCross) {
+                        thermCross.classList.remove('hidden');
+                        thermCross.style.left = (nx * 100) + '%';
+                        thermCross.style.top = (ny * 100) + '%';
+                    }
+
+                    const dx = (nx - 0.5) * 2;
+                    const dy = (ny - 0.5) * 2;
+                    cursor3 = { dx: dx, dy: dy, dist: Math.min(1, Math.hypot(dx, dy)) };
+                    syncTab3ExactMatch();
+                });
+
+                thermArea.addEventListener('mouseleave', function() {
+                    isHovering3 = false;
+                    if (thermCross) thermCross.classList.add('hidden');
+                    syncTab3ExactMatch();
+                });
+            }
+
+            function syncTab3ExactMatch() {
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+
+                let dx = cursor3.dx, dy = cursor3.dy, dist = cursor3.dist;
+                let lat, lon;
+
+                if (isHovering3) {
+                    lat = -90 + dist * 10;
+                    lon = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+                } else {
+                    const s = (typeof activeSite !== 'undefined') ? activeSite : { lat: -89.45, lon: 222.40 };
+                    lat = s.lat;
+                    lon = s.lon;
+                    dist = Math.min(0.85, Math.max(0.14, (90 + lat) / 10));
+                    const rad = lon * (Math.PI / 180);
+                    dx = Math.cos(rad) * dist;
+                    dy = Math.sin(rad) * dist;
+                }
+
+                // 1. Exact XYZ Coordinates matching Tab 2
+                const R = 1737.4;
+                const xKm = (R * Math.cos(lat * Math.PI / 180) * Math.cos(lon * Math.PI / 180)).toFixed(1);
+                const yKm = (R * Math.cos(lat * Math.PI / 180) * Math.sin(lon * Math.PI / 180)).toFixed(1);
+                const zKm = (R * Math.sin(lat * Math.PI / 180)).toFixed(1);
+
+                document.getElementById('therm-latlon').innerText = (isHovering3 ? 'LAT: ' : 'TARGET: ') + lat.toFixed(2) + '° | LON: ' + lon.toFixed(2) + '°';
+                document.getElementById('therm-xyz').innerText = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+
+                // 2. Exact Solar Intensity, Incidence Angle & Network Signal matching Tab 2
+                const inPSR = isHovering3 && dist < 0.09;
+                const align = dx * Math.cos(ang) + dy * Math.sin(ang);
+                const illumPct = inPSR ? 0 : Math.max(0, Math.min(100, Math.round((align + 0.65) * 75)));
+                const solarWm2 = Math.round((illumPct / 100) * 1361);
+                const incAngle = inPSR ? '90.0° (SHADOW)' : (90 - (illumPct / 100) * 8.5).toFixed(1) + '° Inc';
+
+                const librationShift = Math.sin(ang * 1.08) * 0.18;
+                const earthVis = (dy + librationShift) > -0.22 && !inPSR;
+                const netPct = inPSR ? 15 : (earthVis ? Math.min(99, Math.max(65, Math.round(85 + Math.sin(ang * 1.08) * 12))) : 42);
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+
+                document.getElementById('therm-solar').innerText = solarWm2.toLocaleString() + ' W/m² (' + incAngle + ')';
+                const cEl = document.getElementById('therm-comm');
+                cEl.innerText = (earthVis ? 'DIRECT' : 'RELAY') + ' | ' + netPct + '% (' + dBm + 'dBm)';
+                cEl.className = 'font-bold ' + (earthVis ? 'text-sky-400' : 'text-amber-400');
+
+                // 3. Mirror Exact Pin Position from Tab 2
+                const pin2 = document.getElementById('map-2d-pin');
+                const lbl2 = document.getElementById('map-2d-label');
+                const pin3 = document.getElementById('thermal-pin');
+                const lbl3 = document.getElementById('thermal-pin-label');
+                if (pin2 && pin3) { pin3.style.left = pin2.style.left; pin3.style.top = pin2.style.top; }
+                if (lbl2 && lbl3) { lbl3.innerText = lbl2.innerText; }
+            }
+
+            function renderThermalHeatmap() {
+                requestAnimationFrame(renderThermalHeatmap);
+                if (tab3Page.classList.contains('hidden')) return;
+                syncTab3ExactMatch();
+
+                const tc = document.getElementById('thermal-heatmap-canvas');
+                if (!tc) return;
+                const tctx = tc.getContext('2d');
+                tctx.clearRect(0, 0, 400, 400);
+
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+                const cx = 200, cy = 200;
+
+                const sunX = cx + Math.cos(ang) * 190;
+                const sunY = cy + Math.sin(ang) * 190;
+                const coldX = cx - Math.cos(ang) * 190;
+                const coldY = cy - Math.sin(ang) * 190;
+
+                const thermGrad = tctx.createLinearGradient(sunX, sunY, coldX, coldY);
+                thermGrad.addColorStop(0, '#ef4444');
+                thermGrad.addColorStop(0.35, '#f59e0b');
+                thermGrad.addColorStop(0.55, '#10b981');
+                thermGrad.addColorStop(0.78, '#2563eb');
+                thermGrad.addColorStop(1, '#1e1b4b');
+
+                tctx.fillStyle = thermGrad;
+                tctx.beginPath();
+                tctx.arc(cx, cy, 198, 0, Math.PI * 2);
+                tctx.fill();
+
+                const psrCold = tctx.createRadialGradient(cx, cy, 2, cx, cy, 22);
+                psrCold.addColorStop(0, '#1e1b4b');
+                psrCold.addColorStop(0.7, '#1d4ed8');
+                psrCold.addColorStop(1, 'rgba(30, 27, 75, 0)');
+                tctx.fillStyle = psrCold;
+                tctx.beginPath();
+                tctx.arc(cx, cy, 22, 0, Math.PI * 2);
+                tctx.fill();
+            }
+            renderThermalHeatmap();
+
+            const activeStyle = 'px-3 py-1 rounded-md text-xs mono font-bold bg-cyan-500 text-slate-950 transition shadow';
+            const inactiveStyle = 'px-3 py-1 rounded-md text-xs mono font-bold text-slate-300 hover:text-white transition';
+
+            btnTab3.onclick = function() {
+                threeBox.classList.add('hidden');
+                altPage.classList.add('hidden');
+                tab3Page.classList.remove('hidden');
+                btnTab3.className = activeStyle;
+                btn3D.className = inactiveStyle;
+                btnAlt.className = inactiveStyle;
+                if (badge) badge.innerText = 'MODE: THERMAL & ELEVATION';
+            };
+
+            btn3D.addEventListener('click', () => { tab3Page.classList.add('hidden'); btnTab3.className = inactiveStyle; });
+            btnAlt.addEventListener('click', () => { tab3Page.classList.add('hidden'); btnTab3.className = inactiveStyle; });
+        })();
+    </script>
+     <script>
+        (function buildNasaAstronautCopilotInCenter() {
+            const timeSlider = document.getElementById('time-slider');
+            const timelineCard = timeSlider ? timeSlider.closest('.glass') : null;
+            if (!timelineCard) return;
+
+            const oldBot = document.getElementById('nasa-ai-copilot-card');
+            if (oldBot) oldBot.remove();
+
+            const astronautSvg = 
+                '<svg viewBox="0 0 64 64" class="w-10 h-10 rounded-full bg-slate-900 border-2 border-cyan-400 p-1 shadow-lg shadow-cyan-500/20 shrink-0">' +
+                    '<circle cx="32" cy="30" r="18" fill="#e2e8f0"/>' +
+                    '<path d="M18 28 C18 18, 46 18, 46 28 C46 37, 40 41, 32 41 C24 41, 18 37, 18 28 Z" fill="#0f172a"/>' +
+                    '<path d="M22 25 C25 21, 35 21, 39 24" stroke="#38bdf8" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+                    '<path d="M14 56 C14 45, 50 45, 50 56" fill="#cbd5e1"/>' +
+                    '<rect x="25" y="47" width="14" height="7" rx="1.5" fill="#0284c7"/>' +
+                    '<circle cx="51" cy="24" r="3" fill="#10b981"/>' +
+                '</svg>';
+
+            const botCard = document.createElement('div');
+            botCard.id = 'nasa-ai-copilot-card';
+            botCard.className = 'glass p-3 rounded-xl border border-cyan-500/40 mt-3 flex flex-col gap-2 w-full';
+            botCard.innerHTML = 
+                '<div class="flex items-center gap-2.5 border-b border-slate-800 pb-2">' +
+                    astronautSvg +
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="flex items-center justify-between">' +
+                            '<span class="text-xs font-bold mono text-cyan-400">ARTEMIS-X AI COPILOT</span>' +
+                            '<span class="text-[9px] mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">NASA LRO SYNC</span>' +
+                        '</div>' +
+                        '<div class="text-[10px] text-slate-400 truncate">Powered by NASA SVS & Artemis III Data</div>' +
+                    '</div>' +
+                '</div>' +
+
+                '<div id="nasa-bot-messages" dir="rtl" class="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 h-32 overflow-y-auto space-y-2 text-[11px] leading-relaxed text-right">' +
+                    '<div class="bg-slate-900/90 border border-cyan-500/20 rounded-lg p-2 text-slate-200">' +
+                        '<span dir="ltr" class="text-cyan-400 font-bold mono block text-[10px] text-left">👨‍🚀 ASTRONAUT AI:</span>' +
+                        'أهلاً بك في غرفة عمليات أرتميس! اسألني عن تضاريس القطب الجنوبي، الجليد المائي، الجاذبية، أو اطلب مني تغيير الإضاءة والميل على الخريطة.' +
+                    '</div>' +
+                '</div>' +
+
+                '<div dir="rtl" class="flex flex-wrap gap-1.5 text-[10px] mono">' +
+                    '<button type="button" class="nasa-q-btn px-2.5 py-1 rounded bg-slate-900 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-400 text-cyan-300 transition">تحليل الموقع الحالي</button>' +
+                    '<button type="button" class="nasa-q-btn px-2.5 py-1 rounded bg-slate-900 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-400 text-cyan-300 transition">أفضل موقع للهبوط؟</button>' +
+                    '<button type="button" class="nasa-q-btn px-2.5 py-1 rounded bg-slate-900 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-400 text-cyan-300 transition">فوهة شاكلتون والجليد</button>' +
+                '</div>' +
+
+                '<form id="nasa-bot-form" dir="rtl" class="flex gap-1.5">' +
+                    '<input id="nasa-bot-input" type="text" placeholder="اسأل رائد الفضاء أو اكتب: خلي الإضاءة 95%..." class="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">' +
+                    '<button type="submit" class="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs mono transition">إرسال</button>' +
+                '</form>';
+
+            timelineCard.insertAdjacentElement('afterend', botCard);
+            const msgBox = document.getElementById('nasa-bot-messages');
+            const form = document.getElementById('nasa-bot-form');
+            const input = document.getElementById('nasa-bot-input');
+
+            function getNasaBotReply(query) {
+                const q = query.trim().toLowerCase();
+                const s = (typeof activeSite !== 'undefined') ? activeSite : { name: 'Connecting Ridge', lat: -89.45, lon: 222.40, slope: 3.5, baseIllum: 92 };
+
+                // Helper to jump directly to any specific lunar landmark & update all maps
+                function jumpToLandmark(name, lat, lon, slope, sunPct, desc, url, urlLabel) {
+                    if (typeof activeSite !== 'undefined') {
+                        activeSite.id = 'ai_nav';
+                        activeSite.name = name;
+                        activeSite.lat = lat;
+                        activeSite.lon = lon;
+                        activeSite.slope = slope;
+                        activeSite.baseIllum = sunPct;
+                        activeSite.earthOffset = 3.5;
+                    }
+                    const hudName = document.getElementById('hud-site-name');
+                    const hudCoords = document.getElementById('hud-coords');
+                    if (hudName) hudName.innerText = name;
+                    if (hudCoords) hudCoords.innerText = 'Lat: ' + lat.toFixed(2) + '° | Lon: ' + lon.toFixed(2) + '° | Slope: ' + slope + '°';
+
+                    // Move 2D Map Pin
+                    const pin2D = document.getElementById('map-2d-pin');
+                    const lbl2D = document.getElementById('map-2d-label');
+                    if (pin2D) {
+                        const rPct = Math.min(42, Math.max(4, (90 + lat) * 4.2));
+                        const rad = lon * (Math.PI / 180);
+                        pin2D.style.left = Math.max(10, Math.min(90, 50 + Math.cos(rad) * rPct)) + '%';
+                        pin2D.style.top = Math.max(10, Math.min(90, 50 + Math.sin(rad) * rPct)) + '%';
+                    }
+                    if (lbl2D) lbl2D.innerText = name.toUpperCase();
+
+                    return {
+                        text: '📍 تم تحديد موقع <b dir="ltr">' + name + '</b> على الخريطة (<b dir="ltr">' + lat.toFixed(2) + '°S, ' + lon.toFixed(2) + '°E</b>) — الإضاءة <b>' + sunPct + '%</b> والميل <b dir="ltr">' + slope + '°</b>. ' + desc,
+                        source: url,
+                        sourceLabel: urlLabel
+                    };
+                }
+
+                // 1. Friendly Greetings
+                if (/^(اهلا|أهلا|مرحبا|سلام|السلام|هاي|هلو|hi|hello|ازيك|إزيك|عامل|اخبارك)/.test(q)) {
+                    return { text: 'أهلاً بك يا بطل في غرفة عمليات <b>ARTEMIS-X</b>! 👨‍🚀 اكتب لي أي شروط (مثلاً: <i>إضاءة 90% وميل 4 درجات</i>) أو اسم أي منطقة على القمر وسأحددها لك فوراً على الخريطة!', source: null };
+                }
+
+                // 2. Smart Combined Constraints Parser (Extracts BOTH Sunlight % and Slope ° in one sentence!)
+                const sunMatch = q.match(/(?:اضاءة|إضاءة|شمس|sun|نور)[^\d]*(\d+(?:\.\d+)?)/) || q.match(/(\d+(?:\.\d+)?)\s*%/);
+                const slopeMatch = q.match(/(?:ميل|انحدار|زاوية|slope)[^\d]*(\d+(?:\.\d+)?)/) || q.match(/(\d+(?:\.\d+)?)\s*(?:درجة|درجات|deg|°)/);
+
+                if (sunMatch || slopeMatch) {
+                    const sunEl = document.getElementById('crit-sun') || document.getElementById('req-illum');
+                    const slopeEl = document.getElementById('crit-slope') || document.getElementById('req-slope');
+                    let appliedMsg = [];
+
+                    if (sunMatch && sunEl) {
+                        const valSun = Math.min(100, Math.max(0, parseFloat(sunMatch[1])));
+                        sunEl.value = valSun;
+                        sunEl.dispatchEvent(new Event('input'));
+                        appliedMsg.push('الإضاءة <b>' + valSun + '%</b>');
+                    }
+                    if (slopeMatch && slopeEl) {
+                        const valSlope = Math.min(25, Math.max(1, parseFloat(slopeMatch[1])));
+                        slopeEl.value = valSlope;
+                        slopeEl.dispatchEvent(new Event('input'));
+                        appliedMsg.push('أقصى ميل <b dir="ltr">' + valSlope + '°</b>');
+                    }
+
+                    if (typeof window.solveAccurateTarget === 'function') window.solveAccurateTarget();
+                    const newSite = (typeof activeSite !== 'undefined') ? activeSite : s;
+
+                    return {
+                        text: '🎯 تم ضبط الشروط (' + appliedMsg.join(' و ') + ') وتوجيه المؤشر الأخضر على الخريطة إلى: <b dir="ltr">' + newSite.name + '</b> (<b dir="ltr">' + newSite.lat.toFixed(2) + '°S, ' + newSite.lon.toFixed(2) + '°E</b>)!',
+                        source: 'https://nasa.gov',
+                        sourceLabel: 'NASA LRO Mission Target Solver'
+                    };
+                }
+
+                // 3. Direct Location Navigation by Name (Shackleton, Malapert, Leibnitz, Ridge, Crater Floor, Apollo)
+                if (q.includes('شاكلتون') || q.includes('shackleton')) {
+                    if (q.includes('قاع') || q.includes('مظلم') || q.includes('floor') || q.includes('psr')) {
+                        return jumpToLandmark('Shackleton Crater Floor (PSR)', -89.90, 45.00, 18.0, 0, 'منطقة مظلمة أبدياً غنية بالجليد المائي (-228°C) وخطرة للهبوط المباشر.', 'https://nasa.gov', 'NASA Lunar Water & PSR');
+                    }
+                    return jumpToLandmark('Shackleton Rim West', -89.54, 0.00, 4.8, 86, 'حافة فوهة شاكلتون المضيئة؛ مثالية للوصول السريع للجليد مع إضاءة عالية.', 'https://nasa.gov', 'NASA Artemis III Candidate Sites');
+                }
+                if (q.includes('مالابيرت') || q.includes('malapert')) {
+                    return jumpToLandmark('Malapert Massif Summit', -86.00, 2.80, 11.4, 74, 'قمة جبلية شاهقة (+4,900m) توفر رؤية ممتازة ومباشرة لكوكب الأرض.', 'https://nasa.gov', 'NASA LRO Malapert Massif');
+                }
+                if (q.includes('ليبنيتز') || q.includes('leibnitz')) {
+                    return jumpToLandmark('Leibnitz Beta Plateau', -85.20, 31.50, 7.2, 81, 'هضبة واسعة ومستقرة حرارياً مرشحة لهبوط مركبات أرتميس المأهولة.', 'https://nasa.gov', 'NASA Artemis Landing Regions');
+                }
+                if (q.includes('connecting') || q.includes('ridge') || q.includes('تلال') || q.includes('افضل') || q.includes('أفضل') || q.includes('best')) {
+                    return jumpToLandmark('Connecting Ridge Peak', -89.45, 222.40, 3.5, 92, 'أعلى نقطة إضاءة شمسية مستمرة (92%) مع انحدار آمن جداً للهبوط.', 'https://nasa.gov', 'NASA SVS Connecting Ridge');
+                }
+                if (q.includes('ابولو') || q.includes('أبولو') || q.includes('apollo')) {
+                    return jumpToLandmark('Apollo 11 (Mare Tranquillitatis)', 0.67, 23.47, 2.1, 50, 'موقع أول هبوط بشري عام 1969 عند خط الاستواء (14 يوم نهار و14 يوم ليل).', 'https://nasa.gov', 'NASA Apollo 11 Archive');
+                }
+
+                // 4. Current Site Telemetry Analysis
+                if (q.includes('analyze') || q.includes('حالي') || q.includes('تحليل') || q.includes('النقطة')) {
+                    const temp = document.getElementById('metric-temp') ? document.getElementById('metric-temp').innerText : '-38°C';
+                    const power = document.getElementById('header-power-status') ? document.getElementById('header-power-status').innerText : '1,220 W';
+                    return {
+                        text: '📊 تقرير الموقع الحالي <b dir="ltr">' + s.name + '</b> (<b dir="ltr">' + s.lat.toFixed(2) + '°S</b>): الإضاءة <b>' + (s.baseIllum || 90) + '%</b>، الميل <b dir="ltr">' + s.slope + '°</b>، القدرة <b dir="ltr">' + power + '</b>، والحرارة <b dir="ltr">' + temp + '</b>.',
+                        source: 'https://nasa.gov',
+                        sourceLabel: 'NASA Artemis Telemetry'
+                    };
+                }
+
+                // 5. General Space Questions + Direct NASA Search Fallback
+                const encodedQuery = encodeURIComponent(query);
+                return {
+                    text: 'يمكنني توجيهك لأي مكان! جرّب أن تكتب لي: <i>"عايز إضاءة 85% وميل 5 درجات"</i> أو اسألني عن <b>(حافة شاكلتون، جبل مالابيرت، هضبة ليبنيتز، أو قاع الفوهة المظلم)</b>، أو ابحث في ناسا بالأسفل:',
+                    source: 'https://nasa.gov' + encodedQuery,
+                    sourceLabel: 'بحث مباشر في ناسا عن: ' + query
+                };
+            }
+            function appendChat(sender, htmlBody, sourceUrl, sourceLabel) {
+                const div = document.createElement('div');
+                if (sender === 'user') {
+                    div.className = 'bg-cyan-500/20 border border-cyan-500/40 rounded-lg p-2 text-white';
+                    div.innerHTML = '<span dir="ltr" class="text-cyan-300 font-bold mono block text-[9px] text-left">YOU:</span>' + htmlBody;
+                } else {
+                    const linkHtml = sourceUrl
+                        ? '<a dir="ltr" href="' + sourceUrl + '" target="_blank" class="mt-1.5 block text-[9px] mono text-amber-300 hover:underline text-left">🔗 Source: ' + sourceLabel + ' ↗</a>'
+                        : '';
+                    div.className = 'bg-slate-900/95 border border-slate-700 rounded-lg p-2 text-slate-200';
+                    div.innerHTML = '<span dir="ltr" class="text-emerald-400 font-bold mono block text-[9px] text-left">👨‍🚀 ASTRONAUT AI:</span>' + htmlBody + linkHtml;
+                }
+                msgBox.appendChild(div);
+                msgBox.scrollTop = msgBox.scrollHeight;
+            }
+
+            function handleQuery(text) {
+                if (!text.trim()) return;
+                appendChat('user', text);
+                setTimeout(() => {
+                    const res = getNasaBotReply(text);
+                    appendChat('bot', res.text, res.source, res.sourceLabel);
+                }, 150);
+            }
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleQuery(input.value);
+                input.value = '';
+            });
+
+            botCard.querySelectorAll('.nasa-q-btn').forEach(btn => {
+                btn.addEventListener('click', () => handleQuery(btn.innerText));
+            });
+        })();
+     </script>
+     <script>
+        (function unifiedSyncedDashboardController () {
+            // 1. Add Custom Info Box at the bottom of Left Sidebar
+            const leftAside = document.querySelector('aside');
+            if (leftAside && !document.getElementById('custom-left-info-box')) {
+                const box = document.createElement('div');
+                box.id = 'custom-left-info-box';
+                box.className = 'glass p-4 rounded-xl border border-cyan-500/30 mt-3 space-y-2';
+                box.innerHTML = 
+                    '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
+                        '<span id="custom-box-title" class="text-xs font-bold mono text-cyan-400">CUSTOM MISSION NOTES</span>' +
+                        '<span id="custom-box-badge" class="text-[9px] mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">READY</span>' +
+                    '</div>' +
+                    '<div id="custom-box-content" class="text-xs text-slate-300 leading-relaxed">' +
+                        'هذا المربع جاهز لإضافة البيانات أو الملاحظات التي تريدها.' +
+                    '</div>';
+                leftAside.appendChild(box);
+            }
+
+            // 2. Fix Floating Buttons Position below the map card
+            const btnPlay = document.getElementById('btn-play');
+            const controlsBar = btnPlay ? btnPlay.parentElement : null;
+            const targetAnchor = document.getElementById('custom-tab3-view') || document.getElementById('alt-moon-view');
+            if (controlsBar && targetAnchor && targetAnchor.parentElement) {
+                controlsBar.classList.remove('absolute', 'bottom-3', 'left-3', 'z-20');
+                controlsBar.classList.add('mt-2.5', 'flex', 'items-center', 'gap-2');
+                targetAnchor.parentElement.appendChild(controlsBar);
+            }
+
+            // 3. Unified Mouse & Coordinate State shared across Tab 2, Tab 3, and Right Panel
+            let sharedHover = { active: false, dx: -0.06, dy: 0.06, dist: 0.08 };
+
+            ['map-2d-interactive-area', 'thermal-interactive-area'].forEach(areaId => {
+                const area = document.getElementById(areaId);
+                if (!area) return;
+                area.addEventListener('mousemove', function(e) {
+                    const rect = area.getBoundingClientRect();
+                    const dx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+                    const dy = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+                    sharedHover = { active: true, dx: dx, dy: dy, dist: Math.min(1, Math.hypot(dx, dy)) };
+                    syncAllViewsUnified();
+                });
+                area.addEventListener('mouseleave', function() {
+                    sharedHover.active = false;
+                    syncAllViewsUnified();
+                });
+            });
+
+            function syncAllViewsUnified() {
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+
+                let lat, lon, dx, dy, dist;
+
+                if (sharedHover.active) {
+                    dx = sharedHover.dx;
+                    dy = sharedHover.dy;
+                    dist = sharedHover.dist;
+                    lat = -90 + dist * 10;
+                    lon = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+                } else {
+                    const s = (typeof activeSite !== 'undefined') ? activeSite : { lat: -89.45, lon: 222.40 };
+                    lat = s.lat;
+                    lon = s.lon;
+                    dist = Math.min(0.85, Math.max(0.12, (90 + lat) / 10));
+                    const rad = lon * (Math.PI / 180);
+                    dx = Math.cos(rad) * dist;
+                    dy = Math.sin(rad) * dist;
+                }
+
+                // Exact Unified Cartesian XYZ (Moon Radius = 1737.4 km)
+                const R = 1737.4;
+                const latRad = lat * (Math.PI / 180);
+                const lonRad = lon * (Math.PI / 180);
+                const xKm = (R * Math.cos(latRad) * Math.cos(lonRad)).toFixed(1);
+                const yKm = (R * Math.cos(latRad) * Math.sin(lonRad)).toFixed(1);
+                const zKm = (R * Math.sin(latRad)).toFixed(1);
+
+                const prefix = sharedHover.active ? 'LAT: ' : 'TARGET: ';
+                const latLonText = prefix + lat.toFixed(2) + '° | LON: ' + lon.toFixed(2) + '°';
+                const xyzText = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+
+                // Update Coordinates identically in BOTH Tab 2 & Tab 3
+                const ll2 = document.getElementById('cursor-latlon');
+                const ll3 = document.getElementById('therm-latlon');
+                const xyz2 = document.getElementById('tele-xyz');
+                const xyz3 = document.getElementById('therm-xyz');
+
+                if (ll2) ll2.innerText = latLonText;
+                if (ll3) ll3.innerText = latLonText;
+                if (xyz2) xyz2.innerText = xyzText;
+                if (xyz3) xyz3.innerText = xyzText;
+
+                // Unified Polar Temperature & Colors
+                const inPSR = sharedHover.active && dist < 0.09;
+                const align = dx * Math.cos(ang) + dy * Math.sin(ang);
+
+                let tempC, statusTag, badgeColor, rightColor, heaterNote;
+                if (inPSR) {
+                    tempC = -230;
+                    statusTag = '(PSR ICE)';
+                    badgeColor = 'font-bold text-rose-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-rose-400';
+                    heaterNote = 'Heaters: MAX DRAW (PSR)';
+                } else if (!sharedHover.active || align >= -0.15) {
+                    const factor = sharedHover.active ? Math.max(0, Math.min(1, (align + 0.15) / 1.15)) : 0.85;
+                    tempC = Math.round(-72 + factor * 37); // -35°C to -72°C
+                    statusTag = '(THERMAL OK)';
+                    badgeColor = 'font-bold text-emerald-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-emerald-400';
+                    heaterNote = 'Heaters: Nominal (Solar Peak)';
+                } else {
+                    const shadowFactor = Math.min(1, Math.abs(align + 0.15) / 0.85);
+              tempC = Math.round(-135 - shadowFactor * 40); // -135°C to -175°C
+
+                    statusTag = '(SHADOW COLD)';
+                    badgeColor = 'font-bold text-sky-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-sky-400';
+                    heaterNote = 'Heaters: Active (Shadow)';
+                }
+
+                const tempDisplay = tempC + '°C ' + statusTag;
+
+                // Apply identically to Tab 2, Tab 3, and Right Telemetry Panel
+                const t2 = document.getElementById('tele-temp');
+                const t3 = document.getElementById('therm-temp');
+                const rTemp = document.getElementById('metric-temp');
+                const rStat = document.getElementById('temp-status');
+
+                if (t2) { t2.innerText = tempDisplay; t2.className = badgeColor; }
+                if (t3) { t3.innerText = tempDisplay; t3.className = badgeColor; }
+                if (rTemp) { rTemp.innerText = tempC + '°C'; rTemp.className = rightColor; }
+                if (rStat) { rStat.innerText = heaterNote; }
+            }
+
+            setInterval(syncAllViewsUnified, 200);
+            syncAllViewsUnified();
+        })();
+    </script>
+        <script>
+        (function lockBottomTelemetryToGreenTarget() {
+            // 1. Move floating buttons cleanly below the card so they never cover numbers
+            const btnPlay = document.getElementById('btn-play');
+            const controlsBar = btnPlay ? btnPlay.parentElement : null;
+            const mapCard = document.getElementById('three-container') ? document.getElementById('three-container').parentElement : null;
+            if (controlsBar && mapCard) {
+                controlsBar.classList.remove('absolute', 'bottom-3', 'left-3', 'z-20');
+                controlsBar.classList.add('mt-3', 'flex', 'items-center', 'gap-2');
+                mapCard.appendChild(controlsBar);
+            }
+
+            // 2. Update Bottom Telemetry Headers to reflect Locked Green Target
+            document.querySelectorAll('span').forEach(sp => {
+                if (sp.innerText.includes('LIVE CURSOR SURFACE TELEMETRY') || sp.innerText.includes('LIVE THERMAL SURFACE TELEMETRY')) {
+                    sp.innerText = 'LOCKED GREEN TARGET TELEMETRY (AUTO-SYNCED)';
+                }
+            });
+
+            // 3. Continuously Lock All 4 Bottom Boxes to the Green Target Pin & Lunar Time
+            function syncLockedTargetData() {
+                const s = (typeof activeSite !== 'undefined') ? activeSite : {
+                    name: 'Site 20: Leibnitz Plateau',
+                    lat: -85.20,
+                    lon: 31.50,
+                    slope: 7.2,
+                    baseIllum: 81,
+                    earthOffset: 4.5
+                };
+
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+
+                // Exact Cartesian XYZ Coordinates (Moon Radius = 1737.4 km)
+                const R = 1737.4;
+                const latRad = s.lat * (Math.PI / 180);
+                const lonRad = s.lon * (Math.PI / 180);
+                const xKm = (R * Math.cos(latRad) * Math.cos(lonRad)).toFixed(1);
+                const yKm = (R * Math.cos(latRad) * Math.sin(lonRad)).toFixed(1);
+                const zKm = (R * Math.sin(latRad)).toFixed(1);
+
+                const latLonStr = 'TARGET: ' + s.lat.toFixed(2) + '° | LON: ' + s.lon.toFixed(2) + '°';
+                const xyzStr = 'X:' + xKm + ' Y:' + yKm + ' Z:' + zKm;
+
+                // Dynamic Solar Flux, Elevation Angle, Polar Temp & Network Signal for the Green Target
+                const baseSun = (s.baseIllum || 85) / 100;
+                const liveSunFactor = Math.max(0.15, Math.min(1, baseSun * (0.85 + 0.15 * Math.sin(ang))));
+                const solarWm2 = Math.round(liveSunFactor * 1361);
+                const elevDeg = (1.2 + Math.sin(ang) * 2.4).toFixed(1);
+
+                // Accurate Polar Temperature (-35°C to -75°C in sunlight, -230°C if PSR)
+                const isPSR = (s.baseIllum === 0);
+                const tempC = isPSR ? -230 : Math.round(-75 + liveSunFactor * 40);
+                const tempStr = tempC + '°C ' + (isPSR ? '(PSR ICE)' : '(THERMAL OK)');
+                const tempColor = isPSR ? 'font-bold text-rose-400' : 'font-bold text-emerald-400';
+
+                // Earth DSN & LunaNet Signal
+                const earthAngle = (s.earthOffset || 3.5) + Math.sin(ang * 1.08) * 6.7;
+                const isDirect = earthAngle > 0 && !isPSR;
+                const netPct = isPSR ? 15 : (isDirect ? Math.min(99, Math.max(72, Math.round(88 + Math.sin(ang * 1.08) * 9))) : 45);
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+                const commStr = (isDirect ? 'DIRECT' : 'RELAY') + ' | ' + netPct + '% (' + dBm + 'dBm)';
+
+                // Apply identically to BOTH Tab 2 (2D Map) & Tab 3 (Thermal Map)
+                ['cursor-latlon', 'therm-latlon'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = latLonStr; });
+                ['tele-xyz', 'therm-xyz'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = xyzStr; });
+                ['tele-temp', 'therm-temp'].forEach(id => { const el = document.getElementById(id); if (el) { el.innerText = tempStr; el.className = tempColor; } });
+                ['tele-solar', 'therm-solar'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = solarWm2.toLocaleString() + ' W/m² (' + elevDeg + '° Elev)'; });
+                ['tele-comm', 'therm-comm'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = commStr; });
+            }
+
+            setInterval(syncLockedTargetData, 150);
+            syncLockedTargetData();
+        })();
+    </script>
+        <script>
+        (function lockTempSolarAndCommToGreenTarget() {
+            function enforceUnifiedGreenTelemetry() {
+                const s = (typeof activeSite !== 'undefined') ? activeSite : {
+                    lat: -85.20,
+                    lon: 31.50,
+                    slope: 7.2,
+                    baseIllum: 81,
+                    earthOffset: 4.5
+                };
+
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+
+                // 1. Live Solar Flux & Elevation Angle for the Green Target
+                const baseSun = (s.baseIllum !== undefined ? s.baseIllum : 85) / 100;
+                const isPSR = (baseSun === 0);
+                const liveSunFactor = isPSR ? 0 : Math.max(0.15, Math.min(1, baseSun * (0.85 + 0.15 * Math.sin(ang))));
+                const solarWm2 = Math.round(liveSunFactor * 1361);
+                const elevDeg = isPSR ? '0.0' : (1.2 + Math.sin(ang) * 2.4).toFixed(1);
+                const solarText = solarWm2.toLocaleString() + ' W/m² (' + elevDeg + '° Elev)';
+
+                // 2. Accurate Polar Surface Temperature (-35°C to -75°C Sunlit, -230°C PSR)
+                const tempC = isPSR ? -230 : Math.round(-75 + liveSunFactor * 40);
+                const tempBadgeText = tempC + '°C ' + (isPSR ? '(PSR ICE)' : '(THERMAL OK)');
+                const tempColor = isPSR ? 'font-bold text-rose-400' : 'font-bold text-emerald-400';
+
+                // 3. Earth DSN & LunaNet Link Status synced with Top Header & Right Chart
+                const earthAngle = (s.earthOffset || 3.5) + Math.sin(ang * 1.08) * 6.7;
+                const isDirect = earthAngle > 0 && !isPSR;
+                const netPct = isPSR ? 15 : (isDirect ? Math.min(99, Math.max(72, Math.round(88 + Math.sin(ang * 1.08) * 9))) : 45);
+                const dBm = Math.round(-115 + (netPct / 100) * 38);
+                const commText = (isDirect ? 'DIRECT' : 'RELAY') + ' | ' + netPct + '% (' + dBm + 'dBm)';
+                const commColor = isDirect ? 'font-bold text-sky-400' : 'font-bold text-amber-400';
+
+                // Apply identically to BOTH Tab 2 (2D Map) & Tab 3 (Thermal Map)
+                ['tele-temp', 'therm-temp'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.innerText !== tempBadgeText) {
+                        el.innerText = tempBadgeText;
+                        el.className = tempColor;
+                    }
+                });
+
+                ['tele-solar', 'therm-solar'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.innerText !== solarText) {
+                        el.innerText = solarText;
+                    }
+                });
+
+                ['tele-comm', 'therm-comm'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.innerText !== commText) {
+                        el.innerText = commText;
+                        el.className = commColor;
+                    }
+                });
+
+                // Keep Right Panel Temperature 100% consistent with Bottom Readout
+                const rightTemp = document.getElementById('metric-temp');
+                const rightStat = document.getElementById('temp-status');
+                if (rightTemp && rightTemp.innerText !== (tempC + '°C')) {
+                    rightTemp.innerText = tempC + '°C';
+                    rightTemp.className = 'text-2xl font-bold mono mt-1 ' + (isPSR ? 'text-rose-400' : 'text-emerald-400');
+                }
+                if (rightStat) {
+                    rightStat.innerText = isPSR ? 'Heaters: MAX DRAW (PSR)' : 'Heaters: Nominal (Solar Peak)';
+                }
+            }
+
+            // High-frequency sync (every 60ms) overrides any legacy background script immediately
+            setInterval(enforceUnifiedGreenTelemetry, 60);
+            enforceUnifiedGreenTelemetry();
+        })();
+    </script>
+        <script>
+        (function createCustomLeftSidebarBox() {
+            const leftAside = document.querySelector('aside');
+            if (!leftAside) return;
+
+            const existingBox = document.getElementById('custom-left-panel');
+            if (existingBox) existingBox.remove();
+
+            const newBox = document.createElement('div');
+            newBox.id = 'custom-left-panel';
+            newBox.className = 'glass p-4 rounded-xl border border-cyan-500/30 mt-3 space-y-2';
+            newBox.innerHTML = 
+                '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
+                    '<span id="custom-panel-title" class="text-xs font-bold mono text-cyan-400">CUSTOM MISSION PANEL</span>' +
+                    '<span id="custom-panel-badge" class="text-[9px] mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">READY</span>' +
+                '</div>' +
+                '<div id="custom-panel-body" class="text-xs text-slate-300 leading-relaxed">' +
+                    'المربع جاهز الآن لإضافة البيانات أو العناصر التي تريدها.' +
+                '</div>';
+
+            leftAside.appendChild(newBox);
+        })();
+    </script>
+    <script>
+        (function updateFourRowComparisonTable() {
+            const tbody = document.getElementById('comparison-table');
+            if (!tbody) return;
+
+            let mouseSpot = { active: false, lat: -89.45, lon: 222.40, dx: -0.06, dy: 0.06, dist: 0.08 };
+
+            // Track live mouse movement over 2D Map & Thermal Map
+            ['map-2d-interactive-area', 'thermal-interactive-area'].forEach(areaId => {
+                const area = document.getElementById(areaId);
+                if (!area) return;
+                area.addEventListener('mousemove', function(e) {
+                    const rect = area.getBoundingClientRect();
+                    const dx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+                    const dy = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+                    const dist = Math.min(1, Math.hypot(dx, dy));
+                    mouseSpot = {
+                        active: true,
+                        lat: -90 + dist * 10,
+                        lon: (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360,
+                        dx: dx, dy: dy, dist: dist
+                    };
+                });
+                area.addEventListener('mouseleave', function() {
+                    mouseSpot.active = false;
+                });
+            });
+
+            function refreshFourRows() {
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const ang = (h / 708) * Math.PI * 2;
+                const libration = Math.sin(ang * 1.08) * 6.7;
+
+                // 1. Fixed Historical Site 1: Chandrayaan-3 (69.37°S, 32.32°E)
+                const c3Power = Math.max(0, Math.round((Math.sin(ang) * 0.5 + 0.5) * 86));
+                const c3Comm = (18.0 + libration) > 0 ? 'YES' : 'NO';
+
+                // 2. Fixed Historical Site 2: IM-1 Odysseus (80.13°S, 1.44°E)
+                const im1Power = Math.max(0, Math.round((Math.sin(ang + 0.3) * 0.45 + 0.55) * 82));
+                const im1Comm = (8.5 + libration) > 0 ? 'YES' : 'NO';
+
+                // 3. Green Pinned Target Site (activeSite)
+                const s = (typeof activeSite !== 'undefined') ? activeSite : { name: 'Pinned Target', lat: -85.20, lon: 31.50, baseIllum: 81, slope: 7.2, earthOffset: 4.5 };
+                const baseSun = s.baseIllum !== undefined ? s.baseIllum : 85;
+                const pinPower = baseSun === 0 ? 0 : Math.max(15, Math.min(98, Math.round(baseSun * (0.85 + 0.15 * Math.sin(ang)))));
+                const pinComm = ((s.earthOffset || 3.5) + libration) > 0 && baseSun > 0 ? 'YES' : 'NO';
+                const pinRisk = baseSun === 0 ? 'HIGH' : ((s.slope || 5) <= 7 ? 'LOW' : ((s.slope || 5) <= 12 ? 'MED' : 'HIGH'));
+
+                // 4. Live Mouse Cursor Point
+                const inPSR = mouseSpot.active && mouseSpot.dist < 0.09;
+                const align = mouseSpot.dx * Math.cos(ang) + mouseSpot.dy * Math.sin(ang);
+                const curPower = !mouseSpot.active ? pinPower : (inPSR ? 0 : Math.max(0, Math.min(98, Math.round(70 + align * 26))));
+                const curComm = !mouseSpot.active ? pinComm : ((!inPSR && (mouseSpot.dy + Math.sin(ang * 1.08) * 0.18 > -0.22)) ? 'YES' : 'NO');
+                const curRisk = !mouseSpot.active ? pinRisk : (inPSR ? 'HIGH' : (mouseSpot.dist > 0.65 ? 'MED' : 'LOW'));
+                const curLabel = mouseSpot.active ? 'Cursor (' + mouseSpot.lat.toFixed(1) + '°)' : 'Cursor (Idle)';
+
+                const rows = [
+                    { name: '🇮🇳 Chandrayaan-3', power: c3Power,  comm: c3Comm,  risk: 'LOW',   highlight: false },
+                    { name: '🇺🇸 IM-1 Odysseus', power: im1Power, comm: im1Comm, risk: 'MED',   highlight: false },
+                    { name: '📍 Green Pin',     power: pinPower, comm: pinComm, risk: pinRisk, highlight: true  },
+                    { name: '🖱️ ' + curLabel,   power: curPower, comm: curComm, risk: curRisk, highlight: mouseSpot.active }
+                ];
+
+                tbody.innerHTML = rows.map(r => {
+                    const rowBg = r.highlight ? 'bg-emerald-500/15 font-bold' : '';
+                    const nameColor = r.highlight ? 'text-emerald-300' : 'text-slate-200';
+                    const commColor = r.comm === 'YES' ? 'text-slate-200' : 'text-rose-400';
+                    const riskColor = r.risk === 'LOW' ? 'text-emerald-400' : (r.risk === 'MED' ? 'text-amber-400' : 'text-rose-400');
+
+                    return (
+                        '<tr class="' + rowBg + '">' +
+                            '<td class="py-1.5 font-semibold ' + nameColor + '">' + r.name + '</td>' +
+                            '<td class="text-cyan-400">' + r.power + '%</td>' +
+                            '<td class="' + commColor + '">' + r.comm + '</td>' +
+                            '<td class="' + riskColor + ' font-bold">' + r.risk + '</td>' +
+                        '</tr>'
+                    );
+                }).join('');
+            }
+
+            setInterval(refreshFourRows, 150);
+            refreshFourRows();
+        })();
+    </script>
+     <script>
+        (function liveSyncTab3ToTab2EveryMoment() {
+            const tab2 = document.getElementById('alt-moon-view');
+            const tab3 = document.getElementById('custom-tab3-view');
+            if (!tab2 || !tab3) return;
+
+            // 1. Copy Tab 3's exact bottom telemetry box layout into Tab 2
+            const tab2Box = tab2.querySelector('.mt-2, .mt-1\\.5');
+            const tab3Box = tab3.lastElementChild;
+
+            if (tab2Box && tab3Box) {
+                tab2Box.outerHTML = tab3Box.outerHTML
+                    .replace('id="therm-latlon"', 'id="tab2-mirrored-latlon"')
+                    .replace('id="therm-xyz"', 'id="tab2-mirrored-xyz"')
+                    .replace('id="therm-temp"', 'id="tab2-mirrored-temp"')
+                    .replace('id="therm-solar"', 'id="tab2-mirrored-solar"')
+                    .replace('id="therm-comm"', 'id="tab2-mirrored-comm"');
+            }
+
+            // 2. Live Moment-by-Moment Sync (Every 50ms) from Tab 3 into Tab 2
+            function copyLiveMoment() {
+                const pairs = [
+                    ['therm-latlon', 'tab2-mirrored-latlon'],
+                    ['therm-xyz',    'tab2-mirrored-xyz'],
+                    ['therm-temp',   'tab2-mirrored-temp'],
+                    ['therm-solar',  'tab2-mirrored-solar'],
+                    ['therm-comm',   'tab2-mirrored-comm']
+                ];
+
+                for (let i = 0; i < pairs.length; i++) {
+                    const src = document.getElementById(pairs[i][0]);
+                    const dst = document.getElementById(pairs[i][1]);
+                    if (src && dst) {
+                        if (dst.innerText !== src.innerText) dst.innerText = src.innerText;
+                        if (dst.className !== src.className) dst.className = src.className;
+                    }
+                }
+            }
+
+            setInterval(copyLiveMoment, 50);
+            copyLiveMoment();
+        })();
+    </script>
+        <script>
+        (function liveSyncTab3ToTab2EveryMoment() {
+            const tab2 = document.getElementById('alt-moon-view');
+            const tab3 = document.getElementById('custom-tab3-view');
+            if (!tab2 || !tab3) return;
+
+            const tab2Box = tab2.querySelector('.mt-2');
+            const tab3Box = tab3.lastElementChild;
+
+            if (tab2Box && tab3Box) {
+                tab2Box.outerHTML = tab3Box.outerHTML
+                    .replace('id="therm-latlon"', 'id="tab2-mirrored-latlon"')
+                    .replace('id="therm-xyz"', 'id="tab2-mirrored-xyz"')
+                    .replace('id="therm-temp"', 'id="tab2-mirrored-temp"')
+                    .replace('id="therm-solar"', 'id="tab2-mirrored-solar"')
+                    .replace('id="therm-comm"', 'id="tab2-mirrored-comm"');
+            }
+
+            const idMap = {
+                'therm-latlon': 'tab2-mirrored-latlon',
+                'therm-xyz':    'tab2-mirrored-xyz',
+                'therm-temp':   'tab2-mirrored-temp',
+                'therm-solar':  'tab2-mirrored-solar',
+                'therm-comm':   'tab2-mirrored-comm'
+            };
+
+            function copyLiveMoment() {
+                Object.keys(idMap).forEach(function(srcId) {
+                    const src = document.getElementById(srcId);
+                    const dst = document.getElementById(idMap[srcId]);
+                    if (src && dst) {
+                        if (dst.innerText !== src.innerText) dst.innerText = src.innerText;
+                        if (dst.className !== src.className) dst.className = src.className;
+                    }
+                });
+            }
+
+            setInterval(copyLiveMoment, 50);
+            copyLiveMoment();
+        })();
+    </script>
+        <script>
+        (function fixFullThermalSwingWithSun() {
+            function updateFullThermalCycle() {
+                const s = (typeof activeSite !== 'undefined') ? activeSite : {
+                    lat: -89.45,
+                    lon: 222.40,
+                    baseIllum: 88
+                };
+
+                const h = parseInt((document.getElementById('time-slider') || {}).value) || 0;
+                const sunAngle = (h / 708) * Math.PI * 2; // 0 to 360 degrees over 29.5 Earth days
+                const siteLonRad = (s.lon || 0) * (Math.PI / 180);
+
+                // True directional alignment between rotating Sun and the Landing Site's Longitude
+                // Ranges smoothly from -1.0 (Full Shadow/Night) to +1.0 (Direct Sunlight)
+                const directionalAlign = Math.cos(sunAngle - siteLonRad);
+                const isPSR = (s.baseIllum === 0);
+
+                let realTempC, statusTag, badgeColor, rightColor, heaterText;
+
+                if (isPSR) {
+                    realTempC = -230;
+                    statusTag = '(PSR ICE)';
+                    badgeColor = 'font-bold text-rose-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-rose-400';
+                    heaterText = 'Heaters: MAX DRAW (PSR Ice)';
+                } else if (directionalAlign > 0.25) {
+                    // Full Sunlit Day: -35°C to -70°C (Green)
+                    const dayRatio = (directionalAlign - 0.25) / 0.75;
+                    realTempC = Math.round(-70 + dayRatio * 35);
+                    statusTag = '(THERMAL OK)';
+                    badgeColor = 'font-bold text-emerald-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-emerald-400';
+                    heaterText = 'Heaters: Nominal (Solar Peak)';
+                } else if (directionalAlign >= -0.25) {
+                    // Polar Twilight / Sunset Transition: -71°C to -134°C (Amber)
+                    const twiRatio = (0.25 - directionalAlign) / 0.50;
+                    realTempC = Math.round(-71 - twiRatio * 63);
+                    statusTag = '(TWILIGHT)';
+                    badgeColor = 'font-bold text-amber-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-amber-400';
+                    heaterText = 'Heaters: Warming (Sunset)';
+                } else {
+                    // Deep Lunar Shadow / Night: -135°C to -185°C (Sky Blue)
+                    const nightRatio = Math.min(1, Math.abs(directionalAlign + 0.25) / 0.75);
+                    realTempC = Math.round(-135 - nightRatio * 50);
+                    statusTag = '(SHADOW COLD)';
+                    badgeColor = 'font-bold text-sky-400';
+                    rightColor = 'text-2xl font-bold mono mt-1 text-sky-400';
+                    heaterText = 'Heaters: Active (Lunar Night)';
+                }
+
+                const badgeText = realTempC + '°C ' + statusTag;
+
+                // 1. Update Right Panel Temperature (metric-temp)
+                const rightTempEl = document.getElementById('metric-temp');
+                const rightStatEl = document.getElementById('temp-status');
+                if (rightTempEl) {
+                    rightTempEl.innerText = realTempC + '°C';
+                    rightTempEl.className = rightColor;
+                }
+                if (rightStatEl) {
+                    rightStatEl.innerText = heaterText;
+                }
+
+                // 2. Update All Bottom Telemetry Boxes (Tab 2, Tab 3 & Mirrored Box) identically
+                ['tele-temp', 'therm-temp', 'tab2-mirrored-temp'].forEach(function(id) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.innerText = badgeText;
+                        el.className = badgeColor;
+                    }
+                });
+            }
+
+            setInterval(updateFullThermalCycle, 60);
+            updateFullThermalCycle();
+        })();
+    </script>
+        <script>
+        (function addRedHistoricalPinsOnMaps() {
+            // Historical South Pole Landings with exact Polar Map Coordinates (%)
+            const historicalPins = [
+                {
+                    id: 'im1',
+                    label: '🇺🇸 IM-1 ODYSSEUS',
+                    left: '51.5%',
+                    top: '86.0%',
+                    lat: -80.13,
+                    lon: 1.44,
+                    sun: 74,
+                    slope: 8.2,
+                    eOff: 8.5
+                },
+                {
+                    id: 'c3',
+                    label: '🇮🇳 CHANDRAYAAN-3',
+                    left: '83.5%',
+                    top: '72.0%',
+                    lat: -69.37,
+                    lon: 32.32,
+                    sun: 68,
+                    slope: 4.5,
+                    eOff: 18.0
+                }
+            ];
+
+            // Inject Red Pins into BOTH Tab 2 (2D Map) and Tab 3 (Thermal Map)
+            ['map-2d-interactive-area', 'thermal-interactive-area'].forEach(function(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+
+                historicalPins.forEach(function(hp) {
+                    const pinUid = containerId + '-red-' + hp.id;
+                    const oldPin = document.getElementById(pinUid);
+                    if (oldPin) oldPin.remove();
+
+                    const pinEl = document.createElement('div');
+                    pinEl.id = pinUid;
+                    pinEl.title = 'Click to inspect ' + hp.label;
+                    pinEl.className = 'absolute cursor-pointer z-20 group';
+                    pinEl.style.left = hp.left;
+                    pinEl.style.top = hp.top;
+                    pinEl.style.transform = 'translate(-50%, -50%)';
+
+                    pinEl.innerHTML = 
+                        '<div class="relative flex flex-col items-center">' +
+                            '<div class="w-5 h-5 rounded-full bg-rose-500/40 animate-ping absolute -inset-0.5"></div>' +
+                            '<div class="w-4 h-4 rounded-full bg-rose-600 border-2 border-white shadow-lg flex items-center justify-center">' +
+                                '<div class="w-1.5 h-1.5 rounded-full bg-white"></div>' +
+                            '</div>' +
+                            '<span class="mt-1 px-1.5 py-0.5 rounded bg-slate-950/90 border border-rose-500 text-rose-300 text-[8px] mono font-bold whitespace-nowrap shadow-md group-hover:bg-rose-600 group-hover:text-white transition">' +
+                                hp.label +
+                            '</span>' +
+                        '</div>';
+
+                    // Clicking a red pin focuses the telemetry on that historical site
+                    pinEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (typeof activeSite !== 'undefined') {
+                            activeSite.id = hp.id;
+                            activeSite.name = hp.label;
+                            activeSite.lat = hp.lat;
+                            activeSite.lon = hp.lon;
+                            activeSite.baseIllum = hp.sun;
+                            activeSite.slope = hp.slope;
+                            activeSite.earthOffset = hp.eOff;
+                        }
+                        const hudName = document.getElementById('hud-site-name');
+                        const hudCoords = document.getElementById('hud-coords');
+                        if (hudName) hudName.innerText = hp.label;
+                        if (hudCoords) hudCoords.innerText = 'Lat: ' + hp.lat + '° | Lon: ' + hp.lon + '° | Slope: ' + hp.slope + '°';
+                    });
+
+                    container.appendChild(pinEl);
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
